@@ -1,0 +1,60 @@
+# Builds Lujain in the cloud and publishes the APK as a GitHub Release you can download on your phone.
+# Without signing secrets the APK is signed with a test key (fine for installing on your phone, not for Google Play).
+# With the 4 secrets (KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD) it also builds the signed release APK + AAB.
+name: Build Lujain APK
+
+on:
+  push:
+    branches: [ lujain-apk ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build test APK
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+          mkdir -p out && cp app/build/outputs/apk/debug/app-debug.apk out/Lujain-1.1.1-test.apk
+
+      - name: Build signed APK + AAB (only with secrets)
+        if: ${{ env.KEYSTORE_BASE64 != '' }}
+        env:
+          LUJAIN_KEYSTORE_FILE: ${{ runner.temp }}/upload-keystore.jks
+          LUJAIN_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          LUJAIN_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          LUJAIN_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload-keystore.jks"
+          ./gradlew --no-daemon assembleRelease bundleRelease
+          cp app/build/outputs/apk/release/app-release.apk out/Lujain-1.1.1.apk
+          cp app/build/outputs/bundle/release/app-release.aab out/Lujain-1.1.1.aab
+
+      - name: Publish release
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          TAG="build-${{ github.run_number }}"
+          gh release create "$TAG" out/* --target "${{ github.sha }}" --title "Lujain 1.1.1 (build ${{ github.run_number }})" \
+            --notes "ثبّت Lujain-1.1.1-test.apk على موبايلك. إذا في نسخة قديمة مثبّتة بمفتاح تاني، امسحها أول."
+
+      - name: Keep a copy on branch apk-out
+        run: |
+          cd out && git init -q -b apk-out && git add . \
+            && git -c user.name=lujain-bot -c user.email=bot@users.noreply.github.com commit -qm "APK build ${{ github.run_number }}" \
+            && git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" apk-out
+
+      - name: Upload log on failure
+        if: failure()
+        run: echo "Build failed - see the steps above."
