@@ -1140,12 +1140,13 @@ function micListen() {
 }
 if (SR) {
   rec = new SR();
-  rec.lang = LJL.loc(LJL.T); rec.interimResults = true; rec.continuous = false;
+  rec.lang = LJL.loc(LJL.T); rec.interimResults = true; rec.continuous = true;
   rec.onresult = e => {
     let txt = '';
     for (const r of e.results) { txt += r[0].transcript; if (r.isFinal) gotFinal = true; }
     $('#textInput').value = txt;
     micFails = 0;
+    if (gotFinal) { try { rec.stop(); } catch {} }   // continuous session: the answer is complete, close this turn
   };
   rec.onend = () => {
     listening = false;
@@ -1531,7 +1532,7 @@ function say(text, lang = 'en', rate = 0.95) { ttsSpeak(text, lang, rate); }
 
 /* one-shot speech recognition in a chosen language, with keyboard-dictation fallback */
 let activeRec = null;
-function listen({ lang, input, btn, onFinal }) {
+function listen({ lang, input, btn, onFinal, continuous }) {
   if (micOn) micStop();
   const tipLang = LJL.name(lang === 'ar' ? LJL.N : LJL.T, LJL.DEF ? 'ar' : LJL.N);
   const fallback = msg => {
@@ -1541,9 +1542,10 @@ function listen({ lang, input, btn, onFinal }) {
   if (activeRec) { try { activeRec.stop(); } catch {} return; }
   if (!SR || micMode === 'keyboard') return fallback();
   if ('speechSynthesis' in window) speechSynthesis.cancel();
-  const r = new SR(); r.lang = LJL.loc(lang === 'ar' ? LJL.N : LJL.T); r.interimResults = true; r.continuous = false;
+  const r = new SR(); r.lang = LJL.loc(lang === 'ar' ? LJL.N : LJL.T); r.interimResults = true; r.continuous = !!continuous;
   let final = false; const base = input.value && input.tagName === 'TEXTAREA' ? input.value.trim() + ' ' : '';
-  r.onresult = e => { let t = ''; for (const x of e.results) { t += x[0].transcript; if (x.isFinal) final = true; } input.value = base + t; input.dispatchEvent(new Event('input')); };
+  r.onresult = e => { let t = ''; for (const x of e.results) { t += x[0].transcript; if (x.isFinal) final = true; } input.value = base + t; input.dispatchEvent(new Event('input'));
+    if (continuous && final) { try { r.stop(); } catch {} } };
   r.onend = () => { activeRec = null; btn.classList.remove('listening', 'on'); if (final && onFinal) onFinal(); };
   r.onerror = e => {
     activeRec = null; btn.classList.remove('listening', 'on');
@@ -1850,8 +1852,8 @@ $('#sendEn').onclick = () => cvSend('en');
 $('#sendAr').onclick = () => cvSend('ar');
 $('#inEn').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); cvSend('en'); } });
 $('#inAr').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); cvSend('ar'); } });
-$('#micEn').onclick = () => listen({ lang: 'en', input: $('#inEn'), btn: $('#micEn'), onFinal: () => cvSend('en') });
-$('#micAr').onclick = () => listen({ lang: 'ar', input: $('#inAr'), btn: $('#micAr'), onFinal: () => cvSend('ar') });
+$('#micEn').onclick = () => listen({ lang: 'en', input: $('#inEn'), btn: $('#micEn'), onFinal: () => cvSend('en'), continuous: true });
+$('#micAr').onclick = () => listen({ lang: 'ar', input: $('#inAr'), btn: $('#micAr'), onFinal: () => cvSend('ar'), continuous: true });
 /* Phrasebook: en | Shami Arabic | American pronunciation in Arabic letters | note */
 const PHRASES_RAW = [
  { id: 'street', icon: '🗽', ar: 'أساسيات الشارع', rows: `
@@ -2096,7 +2098,7 @@ $('#prModal').addEventListener('click', e => { if (e.target.id === 'prModal') cl
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#prModal').classList.contains('open')) closePractice(); });
 $('#prHear').onclick = () => say(prItem.en, 'en', 0.9);
 $('#prSlow').onclick = () => say(prItem.en, 'en', 0.5);
-$('#prMic').onclick = () => { $('#prIn').value = ''; listen({ lang: 'en', input: $('#prIn'), btn: $('#prMic'), onFinal: gradePractice }); };
+$('#prMic').onclick = () => { $('#prIn').value = ''; listen({ lang: 'en', input: $('#prIn'), btn: $('#prMic'), onFinal: gradePractice, continuous: true }); };
 $('#prGrade').onclick = gradePractice;
 $('#prIn').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); gradePractice(); } });
 async function gradePractice() {

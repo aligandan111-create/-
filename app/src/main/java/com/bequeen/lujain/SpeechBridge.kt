@@ -47,6 +47,12 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
     private var startSent = false         // "start" already sent to JS for this session
     private var dirty = false             // recognizer was cancelled: build a fresh one before reuse
 
+    // 1.3.2: resilient continuous sessions
+    private var speechEnded = false       // onEndOfSpeech seen in this cycle
+    private var sessionHeard = false      // anything heard since startListen
+    private var busyRetries = 0           // consecutive ERROR_RECOGNIZER_BUSY recoveries (max 3)
+    private var softRestarts = 0          // consecutive restarts after non-silence errors (safety cap)
+
     @JavascriptInterface
     fun hasPermission(): Boolean =
         ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -74,6 +80,7 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
             this.interim = interim
             this.continuous = continuous
             preferOffline = true; startSent = false
+            sessionHeard = false; busyRetries = 0; softRestarts = 0
             newCycle()
             listen()
         }
@@ -103,7 +110,12 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
         recognizer = null
     }
 
-    private fun newCycle() { retried = false; heard = false }
+    private fun newCycle() { retried = false; heard = false; speechEnded = false }
+
+    /** Continuous mode: listen again on the SAME id, no "end" to JS. */
+    private fun restartSameSession(id: String, delayMs: Long = 0) {
+        main.postDelayed({ if (curId == id) { newCycle(); listen() } }, delayMs)
+    }
 
     private fun freshRecognizer() {
         runCatching { recognizer?.destroy() }
@@ -120,6 +132,10 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
             .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, interim)
             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, preferOffline)
+            // silence tolerance: don't end the phrase at the first short pause
+            .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 2000L)
+            .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+            .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
             .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, activity.packageName)
         try {
             recognizer?.startListening(intent)
@@ -135,7 +151,8 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
      * and EXTRA_PREFER_OFFLINE=false (same id, lang, interim, continuous). Returns true if retrying.
      */
     private fun quietRetry(): Boolean {
-        if (retried || heard || curId == null) return false
+        // only the offline-first attempt falls back (1.3.1 behaviour); later cycles are handled by continuous mode
+        if (retried || heard || !preferOffline || curId == null) return false
         retried = true
         preferOffline = false
         val id = curId
@@ -153,6 +170,7 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
         // so a failed first attempt sends no JS event at all.
         override fun onReadyForSpeech(params: Bundle?) {
             val id = curId ?: return
+            busyRetries = 0
             if (!preferOffline || retried) sendStartOnce(id)
         }
         override fun onBeginningOfSpeech() { curId?.let { sendStartOnce(it) } }
@@ -160,17 +178,16 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
         override fun onPartialResults(partial: Bundle?) {
             val id = curId ?: return
             val t = partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-            if (t.isNotBlank()) { heard = true; sendStartOnce(id); emit(id, "partial", text(t)) }
+            if (t.isNotBlank()) { heard = true; sessionHeard = true; softRestarts = 0; sendStartOnce(id); emit(id, "partial", text(t)) }
         }
 
         override fun onResults(results: Bundle?) {
             val id = curId ?: return
             val t = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-            heard = true; sendStartOnce(id)
+            heard = true; sessionHeard = true; softRestarts = 0; sendStartOnce(id)
             emit(id, "final", text(t))
             if (continuous) {
-                // continuous: keep listening, no "end" (short pause so the engine is free again)
-                main.postDelayed({ if (curId == id) { newCycle(); listen() } }, 150)
+                restartSameSession(id)                     // continuous: keep listening, no "end"
             } else {
                 curId = null
                 emit(id, "end")
@@ -179,8 +196,26 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
 
         override fun onError(error: Int) {
             val id = curId ?: return                       // cancelled session: already ended
-            // nothing heard yet in this cycle -> one quiet retry online (not for a missing permission)
-            if (error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS && quietRetry()) return
+            val hard = error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS || error == SpeechRecognizer.ERROR_AUDIO
+            // nothing heard yet in this cycle -> one quiet retry online (1.3.1, unchanged; not for hard errors)
+            if (!hard && quietRetry()) return
+            if (continuous && !hard) {
+                if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+                    if (busyRetries < 3) {                 // recreate the recognizer, 150 ms, max 3 in a row
+                        busyRetries++; dirty = true
+                        restartSameSession(id, 150); return
+                    }
+                } else {
+                    val silence = error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                    if (silence) { restartSameSession(id); return }
+                    // the phrase ended and then the engine errored, or the session was already working:
+                    // listen again (capped, so a dead connection can't loop forever)
+                    if ((speechEnded || sessionHeard) && softRestarts < 5) {
+                        softRestarts++
+                        restartSameSession(id, 300); return
+                    }
+                }
+            }
             curId = null
             val name = when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "no-speech"
@@ -196,7 +231,7 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
 
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
-        override fun onEndOfSpeech() {}
+        override fun onEndOfSpeech() { if (curId != null) speechEnded = true }
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
