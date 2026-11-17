@@ -40,6 +40,13 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
     private var interim = true
     private var continuous = false
 
+    // 1.3.1: offline-first with ONE quiet online retry per listening cycle
+    private var preferOffline = true      // first attempt of a session: offline preferred
+    private var retried = false           // the quiet retry was already used in this cycle
+    private var heard = false             // a partial/final arrived in this cycle
+    private var startSent = false         // "start" already sent to JS for this session
+    private var dirty = false             // recognizer was cancelled: build a fresh one before reuse
+
     @JavascriptInterface
     fun hasPermission(): Boolean =
         ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -66,6 +73,8 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
             this.lang = lang.ifBlank { "en-US" }
             this.interim = interim
             this.continuous = continuous
+            preferOffline = true; startSent = false
+            newCycle()
             listen()
         }
     }
@@ -79,6 +88,7 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
     private fun cancelSession(id: String) {
         curId = null
         runCatching { recognizer?.cancel() }
+        dirty = true                                   // late callbacks of a cancel must not reach the next session
         emit(id, "end")
     }
 
@@ -93,42 +103,74 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
         recognizer = null
     }
 
+    private fun newCycle() { retried = false; heard = false }
+
+    private fun freshRecognizer() {
+        runCatching { recognizer?.destroy() }
+        recognizer = SpeechRecognizer.createSpeechRecognizer(activity).also { it.setRecognitionListener(listener) }
+        dirty = false
+    }
+
     private fun listen() {
         val id = curId ?: return
-        if (recognizer == null) {
-            recognizer = SpeechRecognizer.createSpeechRecognizer(activity).also { it.setRecognitionListener(listener) }
-        }
+        if (recognizer == null || dirty) freshRecognizer()
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
             .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, interim)
             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, preferOffline)
             .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, activity.packageName)
         try {
             recognizer?.startListening(intent)
         } catch (t: Throwable) {
+            if (quietRetry()) return
             curId = null
-            emit(id, "error", err("aborted")); emit(id, "end")
+            emit(id, "error", err("aborted", SpeechRecognizer.ERROR_CLIENT)); emit(id, "end")
         }
     }
 
+    /**
+     * First attempt failed before hearing anything: retry ONCE, silently, with a fresh recognizer
+     * and EXTRA_PREFER_OFFLINE=false (same id, lang, interim, continuous). Returns true if retrying.
+     */
+    private fun quietRetry(): Boolean {
+        if (retried || heard || curId == null) return false
+        retried = true
+        preferOffline = false
+        val id = curId
+        freshRecognizer()
+        main.postDelayed({ if (curId == id) listen() }, 250)
+        return true
+    }
+
+    private fun sendStartOnce(id: String) {
+        if (!startSent) { startSent = true; emit(id, "start") }
+    }
+
     private val listener = object : RecognitionListener {
-        override fun onReadyForSpeech(params: Bundle?) { curId?.let { emit(it, "start") } }
+        // "start" is held back on an offline first attempt until it proves itself (speech/results),
+        // so a failed first attempt sends no JS event at all.
+        override fun onReadyForSpeech(params: Bundle?) {
+            val id = curId ?: return
+            if (!preferOffline || retried) sendStartOnce(id)
+        }
+        override fun onBeginningOfSpeech() { curId?.let { sendStartOnce(it) } }
 
         override fun onPartialResults(partial: Bundle?) {
             val id = curId ?: return
             val t = partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-            if (t.isNotBlank()) emit(id, "partial", text(t))
+            if (t.isNotBlank()) { heard = true; sendStartOnce(id); emit(id, "partial", text(t)) }
         }
 
         override fun onResults(results: Bundle?) {
             val id = curId ?: return
             val t = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+            heard = true; sendStartOnce(id)
             emit(id, "final", text(t))
             if (continuous) {
                 // continuous: keep listening, no "end" (short pause so the engine is free again)
-                main.postDelayed({ if (curId == id) listen() }, 150)
+                main.postDelayed({ if (curId == id) { newCycle(); listen() } }, 150)
             } else {
                 curId = null
                 emit(id, "end")
@@ -137,6 +179,8 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
 
         override fun onError(error: Int) {
             val id = curId ?: return                       // cancelled session: already ended
+            // nothing heard yet in this cycle -> one quiet retry online (not for a missing permission)
+            if (error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS && quietRetry()) return
             curId = null
             val name = when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "no-speech"
@@ -146,11 +190,10 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
                 SpeechRecognizer.ERROR_SERVER -> "network"
                 else -> "aborted"                          // ERROR_CLIENT, ERROR_RECOGNIZER_BUSY, anything else
             }
-            emit(id, "error", err(name))
+            emit(id, "error", err(name, error))
             emit(id, "end")
         }
 
-        override fun onBeginningOfSpeech() {}
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
@@ -158,7 +201,9 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
     }
 
     private fun text(t: String) = JSONObject().put("text", t).toString()
-    private fun err(name: String) = JSONObject().put("error", name).toString()
+    /** {"error":"<web-speech-name>","code":<raw Android error code>} (code omitted for errors raised before Android is asked) */
+    private fun err(name: String, code: Int? = null) =
+        JSONObject().put("error", name).apply { if (code != null) put("code", code) }.toString()
 
     private fun emit(id: String, type: String, payload: String = "{}") {
         val js = "window.__lujainSpeechEvent && window.__lujainSpeechEvent(" +
