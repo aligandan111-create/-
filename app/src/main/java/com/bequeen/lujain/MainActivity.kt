@@ -4,7 +4,9 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Bundle
+import android.widget.FrameLayout
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -15,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowCompat
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 
@@ -26,6 +29,7 @@ import androidx.webkit.WebViewClientCompat
 class MainActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var root: FrameLayout
     private lateinit var speech: SpeechBridge
     private lateinit var tts: TtsBridge
 
@@ -56,13 +60,18 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
+        // The WebView sits inside a plain frame. The FRAME gets the padding for the status bar,
+        // the navigation buttons, the camera cutout and the keyboard (padding on a WebView itself
+        // is ignored by its content, which is why the page used to run under the clock and the buttons).
         webView = WebView(this)
-        setContentView(webView)
-
-        // Keep content clear of the status bar, navigation bar and keyboard (Android 15+ is edge-to-edge).
-        ViewCompat.setOnApplyWindowInsetsListener(webView) { v, insets ->
-            val b = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime() or WindowInsetsCompat.Type.displayCutout())
-            v.setPadding(b.left, b.top, b.right, b.bottom)
+        root = FrameLayout(this)
+        root.setBackgroundColor(Color.parseColor("#0F1428"))
+        root.addView(webView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        setContentView(root)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val b = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            v.setPadding(b.left, b.top, b.right, maxOf(b.bottom, ime.bottom))
             WindowInsetsCompat.CONSUMED
         }
 
@@ -82,6 +91,8 @@ class MainActivity : ComponentActivity() {
         webView.webViewClient = object : WebViewClientCompat() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
                 assetLoader.shouldInterceptRequest(request.url)
+
+            override fun onPageFinished(view: WebView, url: String?) = matchBarsToPage()
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val url = request.url
@@ -111,6 +122,25 @@ class MainActivity : ComponentActivity() {
                 }
             }
         })
+    }
+
+    /** Paint the strips behind the clock and the navigation buttons in the page's own background color. */
+    fun matchBarsToPage() {
+        webView.evaluateJavascript("getComputedStyle(document.body).backgroundColor") { v ->
+            val m = Regex("(\\d+)\\D+(\\d+)\\D+(\\d+)").find(v ?: "") ?: return@evaluateJavascript
+            val (r, g, b) = m.destructured.toList().map { it.toInt() }
+            root.setBackgroundColor(Color.rgb(r, g, b))
+            val light = (0.299 * r + 0.587 * g + 0.114 * b) > 150
+            WindowCompat.getInsetsController(window, root).apply {
+                isAppearanceLightStatusBars = light
+                isAppearanceLightNavigationBars = light
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::webView.isInitialized) matchBarsToPage()
     }
 
     override fun onPause() {

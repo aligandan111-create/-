@@ -2,8 +2,30 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<script>
+/* Lujain: pick the learner's two languages and load their packs before the app code runs */
+(function () {
+  var L = ['ar','en','es','fr','tr','ur','fa','ru','de','pt'];
+  var g = function (k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+  var N = g('lj_native'), T = g('lj_target');
+  if (L.indexOf(N) < 0) N = 'ar';
+  if (L.indexOf(T) < 0 || T === N) T = N === 'en' ? 'ar' : 'en';
+  var rtl = { ar: 1, ur: 1, fa: 1 }, h = document.documentElement;
+  h.lang = N; h.dir = rtl[N] ? 'rtl' : 'ltr'; h.setAttribute('data-tdir', rtl[T] ? 'rtl' : 'ltr');
+  if (!(N === 'ar' && T === 'en')) [N, T].forEach(function (c) { document.write('<script src="lang/' + c + '.js"><\/script>'); });
+})();
+</script>
 <script src="bridge.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B2560">
+<meta name="description" content="تعلّم الإنجليزية الأمريكية بالشامي مع لجين">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-64.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="لجين">
 <title>تعلّم الإنجليزية مع لجين</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -364,12 +386,29 @@ main.games-on .gamebar{display:flex}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
 html[dir="ltr"] .den{text-align:left}
 html[dir="ltr"] .bchip.next{direction:ltr}
+/* Lujain's photo */
+.avatar{overflow:hidden}
+.avatar img,.lj-face{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+.welcome h2{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+.welcome h2 .lj-face{width:52px;height:52px;flex-shrink:0;box-shadow:0 0 0 3px var(--accent)}
+/* target language written right-to-left (Arabic, Urdu, Persian) */
+html[data-tdir="rtl"] .ltr{direction:rtl;text-align:right}
+html[data-tdir="rtl"] .answer,html[data-tdir="rtl"] .pool,html[data-tdir="rtl"] .slots,html[data-tdir="rtl"] .tiles,html[data-tdir="rtl"] .wds,html[data-tdir="rtl"] .bot-chips{direction:rtl}
+html[data-tdir="rtl"] .qa-opt{direction:rtl;text-align:right}
+html[data-tdir="ltr"][dir="rtl"] .den{text-align:left}
+.dlat{display:block;font-size:12.5px;color:var(--muted);font-weight:400;direction:ltr;unicode-bidi:isolate}
+.lsel{font:inherit;font-size:15px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);max-width:58%}
+.lpick{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:6px 0 14px}
+.lpick button{border:1.5px solid var(--line);background:var(--surface2);border-radius:12px;padding:10px 6px;font-size:15.5px}
+.lpick button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.lpick button:disabled{opacity:.35}
+.lhead{font-weight:600;margin:4px 2px 2px;text-align:start}
 </style>
 </head>
 <body>
 <header>
   <div class="brand">
-    <div class="avatar" aria-hidden="true">ل</div>
+    <div class="avatar" aria-hidden="true"><img src="icons/lujain-face.jpg" alt=""></div>
     <div><h1>لجين</h1><p>مدرّبتك في الإنجليزية الأمريكية</p></div>
   </div>
   <div class="points" id="points" title="نقاطك"><b>★</b><span id="pointsVal">0</span></div>
@@ -390,7 +429,7 @@ html[dir="ltr"] .bchip.next{direction:ltr}
     <div class="scenarios" id="scenarios" role="group" aria-label="اختر موقفاً للتدريب"></div>
     <div class="scroll" id="chatLog">
       <div class="welcome" id="welcome">
-        <h2>Hi! I'm Lujain 🤖</h2>
+        <h2><img class="lj-face" src="icons/lujain-face.jpg" alt=""><span id="hiTxt" class="ltr">Hi! I'm Lujain</span></h2>
         <p>اختار موقف من فوق، أو احكي معي بالإنجليزي. بشتغل بدون إنترنت وبدون اشتراك، وبكل الموبايلات!</p>
         <span class="bot-tag">🤖 روبوت لجين · مجاني</span>
       </div>
@@ -638,13 +677,15 @@ html[dir="ltr"] .bchip.next{direction:ltr}
   <div class="sheet">
     <div class="sheet-head"><h3 id="setTitle">⚙️ الإعدادات</h3><button class="icon-btn" id="setClose" aria-label="إغلاق">✕</button></div>
     <div class="panel">
-      <div class="settings-row"><span>لغة التطبيق</span><div class="seg" id="langSeg"><button data-lang="ar">العربية</button><button data-lang="en">English</button></div></div>
+      <div class="settings-row"><span>لغتي</span><select id="setNative" class="lsel" aria-label="لغتي"></select></div>
+      <div class="settings-row"><span>اللغة اللي عم تتعلّمها</span><select id="setTarget" class="lsel" aria-label="اللغة اللي عم تتعلّمها"></select></div>
       <div class="settings-row"><span>الصوت</span><div class="seg" id="sndSeg"><button data-snd="1">🔊 شغّال</button><button data-snd="0">🔇 مسكّر</button></div></div>
       <div class="settings-row"><span>ترجمة عبر الإنترنت<br><small class="dar">النص بينبعت لخدمة Google Translate للترجمة</small></span><input type="checkbox" id="setOnline" style="width:24px;height:24px;accent-color:var(--accent)"></div>
       <div class="settings-row"><span>فحص المايك</span><button class="ghost" id="micTestBtn" style="padding:8px 14px">🎤 افحص</button></div>
       <div id="micDiag" class="hint" style="display:none;text-align:start;white-space:pre-line;line-height:1.9;padding:10px 2px 4px"></div>
     </div>
-    <p class="hint" style="text-align:start;padding:12px 2px 0">لجين بتشتغل بدون إنترنت وبدون حساب، وكل تقدّمك محفوظ على جهازك بس.</p>\n    <p class="hint ltr" id="verTag" style="text-align:start;padding:6px 2px 0;opacity:.7">v1.1.1</p>
+    <p class="hint" style="text-align:start;padding:12px 2px 0">لجين بتشتغل بدون إنترنت وبدون حساب، وكل تقدّمك محفوظ على جهازك بس.</p>
+    <p class="hint ltr" id="verTag" style="text-align:start;padding:6px 2px 0;opacity:.7">v1.1.1</p>
   </div>
 </div>
 
@@ -699,6 +740,161 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
 
+/* =========================================================
+   LANGUAGES 🌍  learner's own language (N) + language being learned (T)
+   N=ar, T=en is the original app and needs no language packs.
+   Every other pair reads two packs from lang/<code>.js (loaded in <head>).
+   Inside the app the old slot names stay: "en" = target text, "ar" = own-language text.
+   ========================================================= */
+const LJL = (() => {
+  const LIST = ['ar', 'en', 'es', 'fr', 'tr', 'ur', 'fa', 'ru', 'de', 'pt'];
+  const SELF = { ar: 'العربية', en: 'English', es: 'Español', fr: 'Français', tr: 'Türkçe', ur: 'اردو', fa: 'فارسی', ru: 'Русский', de: 'Deutsch', pt: 'Português' };
+  const FLAG = { ar: '🇸🇦', en: '🇺🇸', es: '🇪🇸', fr: '🇫🇷', tr: '🇹🇷', ur: '🇵🇰', fa: '🇮🇷', ru: '🇷🇺', de: '🇩🇪', pt: '🇧🇷' };
+  const LOC = { ar: 'ar-SA', en: 'en-US', es: 'es-US', fr: 'fr-FR', tr: 'tr-TR', ur: 'ur-PK', fa: 'fa-IR', ru: 'ru-RU', de: 'de-DE', pt: 'pt-BR' };
+  const RTL = new Set(['ar', 'ur', 'fa']);
+  let N = store.get('lj_native', null), T = store.get('lj_target', null);
+  if (!LIST.includes(N)) N = 'ar';
+  if (!LIST.includes(T) || T === N) T = N === 'en' ? 'ar' : 'en';
+  const PK = window.LJ_PACKS || {};
+  const DEF = N === 'ar' && T === 'en';
+  const pk = c => PK[c] || {};
+  const script = c => RTL.has(c) ? 'arab' : c === 'ru' ? 'cyr' : 'lat';
+  const name = (c, inLang = N, loc = false) => { const p = pk(inLang); return (loc && p.namesLoc && p.namesLoc[c]) || (p.names && p.names[c]) || SELF[c]; };
+  const fill = (s, ui) => { const r = String(s).replace(/\{(T|N)(_?)\}/g, (m, w, u) => name(w === 'T' ? T : N, ui, !!u)); return ui === 'ar' ? r.replace(/بـال/g, 'بال') : r; };
+
+  /* strings shown in the target language (feedback, the other speaker's side) */
+  const ts = (k, fb) => { if (DEF) return fb; const v = (pk(T).tside || {})[k]; return v ? fill(v, T) : fb; };
+  /* own-language meaning for a few fixed texts (grammar notes, officer lines) */
+  const m = (k, ar) => N === 'ar' ? ar : ((pk(N).misc || {})[k] ?? (N === 'en' ? '' : ar));
+
+  /* ---------- data remapping ---------- */
+  function remapDict(D) {
+    if (DEF) return;
+    const orig = D.map(d => ({ ...d }));
+    const pick = (c, i) => c === 'en' ? orig[i].en : c === 'ar' ? orig[i].ar : (pk(c).dict || [])[i];
+    const lat = pk('ar').dictLat || [], sT = new Set(), sN = new Set(), out = [];
+    orig.forEach((d, i) => {
+      if (T !== 'en' && d.cat === 'civics') return;
+      const t = pick(T, i), n = pick(N, i);
+      if (!t || !n) return;
+      const kt = t.toLocaleLowerCase(), kn = n.toLocaleLowerCase();
+      if (sT.has(kt) || sN.has(kn)) return;
+      sT.add(kt); sN.add(kn);
+      out.push({ en: t, ar: n, cat: d.cat, key: d.en, lat: T === 'ar' && script(N) !== 'arab' ? (lat[i] || '') : '' });
+    });
+    D.length = 0; D.push(...out);
+  }
+  function remapSentences(S) {
+    if (DEF) return;
+    let i = 0;
+    for (const lv of Object.keys(S)) S[lv] = S[lv].map(([en, note]) => {
+      const k = i++;
+      const sent = c => c === 'en' ? en : (pk(c).sent || [])[k] || '';
+      if (T === 'en') return [en, N === 'ar' ? note : (pk(N).sentNote || [])[k] || ''];
+      return [sent(T), sent(N)];
+    }).filter(x => x[0]);
+  }
+  function remapPhrases(PH) {
+    if (DEF) return;
+    let i = 0; const out = [];
+    for (const c of PH) {
+      const items = c.items.map(x => {
+        const k = i++;
+        const get = l => l === 'en' ? x.en : l === 'ar' ? x.ar : (pk(l).phr || [])[k];
+        return { en: get(T), ar: get(N), pron: T === 'ar' && script(N) !== 'arab' ? ((pk('ar').phrLat || [])[k] || '') : '', note: '' };
+      }).filter(x => x.en && x.ar);
+      if (T !== 'en' && c.id === 'short') continue;
+      out.push({ ...c, items });
+    }
+    PH.length = 0; PH.push(...out);
+  }
+  function remapQA(QP) {
+    if (DEF) return;
+    let i = 0;
+    for (const p of QP) p.items = p.items.map(x => {
+      const k = i++;
+      const four = l => l === 'en' ? [x.q, x.a, x.wrong[0], x.wrong[1]] : l === 'ar' ? [x.qa, x.aa, ...((pk('ar').qaW || [])[k] || ['', ''])] : (pk(l).qa || [])[k] || [];
+      const t = four(T), n = four(N);
+      return { q: t[0], a: t[1], wrong: [t[2], t[3]].filter(Boolean), qa: n[0] || '', aa: n[1] || '' };
+    }).filter(x => x.q && x.a);
+  }
+  function remapCivics(C) {
+    if (DEF || N === 'ar') return;
+    const cv = pk(N).civ || [];
+    C.forEach(c => { const v = cv[c.n - 1]; c.qa = v ? v[0] : ''; c.aa = v ? v[1] : ''; });
+  }
+
+  /* ---------- Lujain robot lines ("English | Shami") ---------- */
+  const botT = (en, ar) => T === 'en' ? en : T === 'ar' ? ar : (pk(T).bot || {})[en];
+  const botN = (en, ar) => N === 'en' ? en : N === 'ar' ? ar : ((pk(N).bot || {})[en] ?? '');
+  function line(en, ar) {
+    if (DEF) return { en, ar };
+    const t = botT(en, ar);
+    if (!t) return { en: botT('Got it!', 'فهمت عليك!') || en, ar: botN('Got it!', 'فهمت عليك!') };
+    return { en: t, ar: botN(en, ar) };
+  }
+  const chipMap = () => (T === 'ar' ? pk('ar').chips : pk(T).chips) || {};
+  const chip = en => DEF || T === 'en' ? en : (chipMap()[en] || en);
+  const cnorm = s => String(s).trim().toLocaleLowerCase().replace(/[.!?¡¿،؟۔,]/g, '').replace(/\s+/g, ' ');
+  function chipBack(txt) {
+    if (DEF || T === 'en') return txt;
+    const t = cnorm(txt);
+    for (const [en, tt] of Object.entries(chipMap())) if (cnorm(tt) === t) return en;
+    return txt;
+  }
+
+  /* ---------- interface ---------- */
+  function uiMap(I18N) {
+    if (DEF) return null;
+    const out = {};
+    if (N === 'en') Object.assign(out, I18N);
+    else if (N !== 'ar') Object.assign(out, pk(N).ui || {});
+    const tp = pk(N).tpl || {};
+    for (const k in tp) out[k] = fill(tp[k], N);
+    return out;
+  }
+  function uiRx(RX) {
+    if (DEF || N === 'ar') return [];
+    if (N === 'en') return RX;
+    const r = pk(N).rx || [];
+    return RX.map(([re, to], i) => [re, typeof to === 'string' ? (r[i] || to) : to]);
+  }
+  const t = k => DEF ? k : fill((pk(N).tpl || {})[k] ?? (pk(N).ui || {})[k] ?? k, N);
+  const word = k => (pk(N).misc || {})[k] || (N === 'ar' ? 'حروف' : 'letters');
+
+  /* ---------- text helpers ---------- */
+  const ARTICLE = { es: /^(el|la|los|las|un|una)\s+/i, fr: /^(le|la|les|un|une)\s+|^l['’]/i, de: /^(der|die|das|ein|eine)\s+/i, pt: /^(o|a|os|as|um|uma)\s+/i };
+  const wordCore = w => { w = String(w || '').trim(); const a = ARTICLE[T]; return a ? w.replace(a, '') : w; };
+  const upper = w => String(w).toLocaleUpperCase(LOC[T]);
+  const stripAr = s => s.replace(/[ً-ٰٟـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
+  function normWordsT(s) {
+    s = String(s).toLocaleLowerCase(LOC[T]);
+    if (script(T) === 'arab') s = stripAr(s);
+    return s.replace(/[’‘]/g, "'").replace(/[^\p{L}\p{N}\s']/gu, ' ').split(/\s+/).filter(Boolean);
+  }
+  const hasLetters = s => /\p{L}/u.test(String(s));
+  const SCRIPT_RX = { arab: /[؀-ۿ]/g, cyr: /[Ѐ-ӿ]/g, lat: /[A-Za-zÀ-ɏ]/g };
+  const STOP = {
+    en: 'the a an is are i you to and of in it my what how do this that we', es: 'el la los las de que y en un una es por para con no qué cómo yo tú', fr: 'le la les de des un une et est que en je tu pas pour avec ça',
+    tr: 've bir bu ne için de da ben sen mi mı çok var', de: 'der die das und ist ich du nicht ein eine zu mit was wie es', pt: 'o a os as de que e em um uma é não para com eu você',
+    ar: 'في من على و شو انا هاد هذا ما لا بدي كيف', ur: 'ہے کے کی میں اور یہ کا نہیں ہیں سے', fa: 'است و در به از این که را می من تو', ru: 'и в не на я что он с как это'
+  };
+  function isNative(text) {
+    const sN = script(N), sT = script(T);
+    if (sN !== sT) {
+      const cnt = k => (String(text).match(SCRIPT_RX[k]) || []).length;
+      return cnt(sN) >= cnt(sT) && cnt(sN) > 0;
+    }
+    const ws = normWordsT(text), score = c => ws.filter(w => (STOP[c] || '').split(' ').includes(w)).length;
+    return score(N) > score(T);
+  }
+  return { N, T, DEF, LIST, SELF, FLAG, RTL, loc: c => LOC[c], name, fill, ts, m, script,
+    remapDict, remapSentences, remapPhrases, remapQA, remapCivics, line, chip, chipBack,
+    uiMap, uiRx, t, word, wordCore, upper, normWords: normWordsT, hasLetters, isNative,
+    praise: () => (ts('praise', '') || '').split(';').filter(Boolean),
+    savedKey: k => DEF ? k : k + '_' + N + '_' + T };
+})();
+
 /* ---------- points ---------- */
 let points = store.get('lj_points', 0);
 function renderPoints() { $('#pointsVal').textContent = points; }
@@ -718,7 +914,9 @@ let soundOn = store.get('lj_sound', true);
 let voice = null;
 function pickVoice() {
   if (!('speechSynthesis' in window)) return;
-  const vs = speechSynthesis.getVoices().filter(v => (v.lang || '').replace('_', '-').toLowerCase().startsWith('en-us'));
+  const all = speechSynthesis.getVoices(), loc = LJL.loc(LJL.T).toLowerCase();
+  let vs = all.filter(v => (v.lang || '').replace('_', '-').toLowerCase().startsWith(loc));
+  if (!vs.length) vs = all.filter(v => (v.lang || '').toLowerCase().startsWith(LJL.T));
   voice = vs.find(v => /samantha|aria|jenny|google us english|zira|female/i.test(v.name)) || vs[0] || null;
 }
 if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
@@ -737,6 +935,7 @@ function showGame(g) {
 }
 document.querySelectorAll('#gameBar [data-g]').forEach(c => c.onclick = () => showGame(c.dataset.g));
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  if (b.dataset.view !== 'chat' && typeof micOn !== 'undefined' && micOn) micStop();
   document.querySelectorAll('nav button').forEach(x => x.setAttribute('aria-selected', x === b));
   $('#mainEl').classList.toggle('games-on', b.dataset.view === 'games');
   if (b.dataset.view === 'games') { showGame(curGame); return; }
@@ -757,11 +956,12 @@ const SCENARIOS = [
   { id: 'job', ar: 'مقابلة عمل', en: 'A simple job interview' },
   { id: 'free', ar: 'محادثة حرة', en: 'Free conversation about daily life' }
 ];
+if (LJL.T !== 'en') SCENARIOS.splice(SCENARIOS.findIndex(s => s.id === 'citizen'), 1);
 let scenario = null;
 let history = [];
 let busy = false;
 let samplePromise = null;
-const getSample = () => (samplePromise ||= (window.claude ? window.claude.use('sample') : Promise.resolve(null)));
+const getSample = () => (samplePromise ||= (window.claude && LJL.DEF ? Promise.resolve().then(() => window.claude.use('sample')).catch(() => null) : Promise.resolve(null)));
 
 const SYSTEM = `You are "Lujain", a friendly, patient AI tutor teaching American English to Arabic speakers (default level A2-B1).
 Rules:
@@ -814,7 +1014,7 @@ function startScenario(s) {
 const SC_LABEL = id => SCENARIOS.find(s => s.id === id)?.ar || id;
 function setChips(chips = [], nextIds = []) {
   const el = $('#botChips');
-  el.innerHTML = chips.map(c => `<button type="button" class="bchip" data-say="${esc(c)}">${esc(c)}</button>`).join('') +
+  el.innerHTML = chips.map(c => { const t = LJL.chip(c); return `<button type="button" class="bchip" data-say="${esc(t)}">${esc(t)}</button>`; }).join('') +
     nextIds.map(id => `<button type="button" class="bchip next" data-next="${id}">▶ ${esc(SC_LABEL(id))}</button>`).join('');
   el.querySelectorAll('[data-say]').forEach(b => b.onclick = () => { if (!busy) askLujain(b.dataset.say); });
   el.querySelectorAll('[data-next]').forEach(b => b.onclick = () => startScenario(SCENARIOS.find(s => s.id === b.dataset.next)));
@@ -841,9 +1041,9 @@ function askLujain(userText) {
   if (!scenario || !LJ.active()) { scenario = scenario || SCENARIOS.find(s => s.id === 'free'); renderScenarios(); LJ.start(scenario.id); }
   history.push({ role: 'user', text: userText });
   if (brainOn() && /[a-z]/i.test(userText)) return brainChat(userText);
-  const r = LJ.reply(userText);
-  if (!r.correction && /[a-z]/i.test(userText)) { const t = LJ.streetTip(userText); if (t && Math.random() < 0.5) r.tip = t; }
-  if (/[a-z]/i.test(userText) && !r.stay) addPoints(r.correction ? 2 : 5);
+  const r = LJ.reply(LJL.chipBack(userText));
+  if (LJL.T === 'en' && !r.correction && /[a-z]/i.test(userText)) { const t = LJ.streetTip(userText); if (t && Math.random() < 0.5) r.tip = t; }
+  if (LJL.hasLetters(userText) && !r.stay) addPoints(r.correction ? 2 : 5);
   botSay(r);
 }
 
@@ -881,8 +1081,10 @@ function micProblemWV() {
   $('#micErrSettings').hidden = true;
   $('#micErrModal').classList.add('open');
 }
-function micProblem(code) {
+const MIC_HARD = ['not-allowed', 'service-not-allowed'];
+function micProblem(code, force) {
   if (!IN_APP || !MIC_ERR[code]) return false;
+  if (!force && !MIC_HARD.includes(code)) { if (code !== 'no-speech' && code !== 'aborted') toast(MIC_ERR[code]); return true; }
   $('#micErrText').textContent = MIC_ERR[code];
   const canOpen = !!(window.LujainSpeech && typeof window.LujainSpeech.openSettings === 'function');
   $('#micErrSettings').hidden = !(canOpen && code === 'not-allowed');
@@ -893,6 +1095,7 @@ const WV_NO_BRIDGE = !IN_APP && /; wv\)/.test(navigator.userAgent);
 function useKeyboardMode(reasonMsg) {
   if (WV_NO_BRIDGE) { micProblemWV(); }
   if (!IN_APP) micMode = 'keyboard';
+  if (typeof micStop === 'function') micStop();
   listening = false; $('#micBtn').classList.remove('listening');
   $('#micHint').textContent = KB_TIP;
   if (reasonMsg) toast(reasonMsg);
@@ -903,41 +1106,82 @@ function renderMicHint() {
 }
 renderMicHint();
 
+/* micOn = the user switched the mic on; it stays on until the same button is tapped again.
+   Each phrase is sent to Lujain, the mic waits while she answers out loud, then listens again.
+   Short failures (silence, a dropped connection, a busy recognizer) are retried quietly. */
+let micOn = false, micFails = 0, micTimer = null;
+function micUi() {
+  const b = $('#micBtn');
+  b.classList.toggle('listening', micOn);
+  b.setAttribute('aria-label', micOn ? 'إيقاف المايك' : 'ابدأ التحدث');
+  $('#micHint').textContent = micMode === 'keyboard' ? KB_TIP
+    : micOn ? '🎤 المايك شغّال. احكي، ولجين بتردّ. اضغط الزر مرة تانية لتوقّفه.' : 'اضغط على الميكروفون وتحدّث بالإنجليزية.';
+}
+function micStop() { micOn = false; clearTimeout(micTimer); try { rec && rec.abort(); } catch {} listening = false; micUi(); }
+function lujainTalking() {
+  if (busy) return true;
+  try { return 'speechSynthesis' in window && (speechSynthesis.speaking || speechSynthesis.pending); } catch { return false; }
+}
+function micNext(delay) {
+  clearTimeout(micTimer);
+  if (!micOn) return;
+  micTimer = setTimeout(function wait() {
+    if (!micOn) return;
+    if (lujainTalking() || document.hidden) { micTimer = setTimeout(wait, 250); return; }
+    micTimer = setTimeout(micListen, 350);   // short gap so the mic doesn't catch the end of Lujain's voice
+  }, delay || 0);
+}
+function micListen() {
+  if (!micOn || listening) return;
+  rec.lang = LJL.loc(LJL.T);
+  gotFinal = false; $('#textInput').value = '';
+  try { rec.start(); listening = true; }
+  catch { listening = false; micFails++; micNext(800); }
+}
 if (SR) {
   rec = new SR();
-  rec.lang = 'en-US'; rec.interimResults = true; rec.continuous = false;
+  rec.lang = LJL.loc(LJL.T); rec.interimResults = true; rec.continuous = false;
   rec.onresult = e => {
     let txt = '';
     for (const r of e.results) { txt += r[0].transcript; if (r.isFinal) gotFinal = true; }
     $('#textInput').value = txt;
+    micFails = 0;
   };
   rec.onend = () => {
-    listening = false; $('#micBtn').classList.remove('listening'); $('#micBtn').setAttribute('aria-label', 'ابدأ التحدث');
+    listening = false;
     if (gotFinal && $('#textInput').value.trim()) sendText();
+    if (micOn) micNext(micFails ? Math.min(3000, 600 * micFails) : 0); else micUi();
   };
   rec.onerror = e => {
-    listening = false; $('#micBtn').classList.remove('listening');
-    if (micProblem(e.error)) return;
-    if (['not-allowed', 'service-not-allowed', 'audio-capture', 'network'].includes(e.error))
-      useKeyboardMode('الميكروفون المباشر غير متاح هنا، فاستخدم ميكروفون لوحة المفاتيح.');
-    else if (e.error === 'no-speech') toast('لم أسمع شيئاً. اضغط وتحدّث مرة أخرى.');
+    listening = false;
+    const code = e.error || 'aborted';
+    if (code === 'no-speech' || code === 'aborted') return;          // silence: just listen again
+    if (code === 'not-allowed' || code === 'service-not-allowed') {   // needs the user: stop and explain
+      micStop();
+      if (!micProblem(code)) useKeyboardMode('الميكروفون المباشر غير متاح هنا، فاستخدم ميكروفون لوحة المفاتيح.');
+      return;
+    }
+    micFails++;
+    if (micFails >= 4) {                                               // keeps failing: stop once and explain once
+      micStop(); micFails = 0;
+      if (!micProblem(code, true)) useKeyboardMode('الميكروفون المباشر غير متاح هنا، فاستخدم ميكروفون لوحة المفاتيح.');
+    }
   };
 }
 $('#micBtn').onclick = () => {
-  if (busy) return;
   if (micMode === 'keyboard' || !rec) { useKeyboardMode(); return; }
-  if (listening) { rec.stop(); return; }
-  if ('speechSynthesis' in window) speechSynthesis.cancel();
-  gotFinal = false; $('#textInput').value = '';
-  try { rec.start(); listening = true; $('#micBtn').classList.add('listening'); $('#micBtn').setAttribute('aria-label', 'إيقاف التسجيل'); }
-  catch { useKeyboardMode('الميكروفون المباشر غير متاح هنا، فاستخدم ميكروفون لوحة المفاتيح.'); }
+  if (micOn) { micStop(); return; }
+  micOn = true; micFails = 0; micUi();
+  if (!busy && 'speechSynthesis' in window) speechSynthesis.cancel();
+  micNext(0);
 };
+document.addEventListener('visibilitychange', () => { if (document.hidden && micOn) { try { rec.abort(); } catch {} } else if (micOn) micNext(300); });
 $('#micHint').addEventListener('dblclick', () => { micMode = SR ? 'direct' : 'keyboard'; renderMicHint(); });
 
 /* =========================================================
    DICTIONARY + NO-REPEAT DECKS
    ========================================================= */
-const CATS = Object.entries(DICT_RAW).map(([id, c]) => ({ id, ar: c.ar, icon: c.icon }));
+const CATS = Object.entries(DICT_RAW).filter(([id]) => id !== 'civics' || LJL.T === 'en').map(([id, c]) => ({ id, ar: c.ar, icon: c.icon }));
 const DICT = [];
 {
   const seenEn = new Set(), seenAr = new Set();
@@ -952,6 +1196,7 @@ const DICT = [];
     }
   }
 }
+LJL.remapDict(DICT);
 const byEn = new Map(DICT.map(d => [d.en, d]));
 const catOf = id => CATS.find(c => c.id === id);
 const catCount = id => DICT.filter(d => d.cat === id).length;
@@ -1021,7 +1266,7 @@ function pickCard(c) {
   if (mSel.ar === mSel.en) {
     mPairs[mSel.ar].done = true; mDone++;
     [a, e].forEach(x => { x.classList.remove('sel'); x.classList.add('done'); });
-    addPoints(10); fb.className = 'feedback ok'; fb.textContent = 'Correct! ✅';
+    addPoints(10); fb.className = 'feedback ok'; fb.textContent = LJL.ts('correct', 'Correct! ✅');
     if (mCat === 'saved') reviewHit(mPairs[mSel.ar].en, true);
     if (mDone === mPairs.length) {
       clearInterval(mTick);
@@ -1099,6 +1344,7 @@ const SENTENCES = {
     ['The dress she wore to the wedding was made by hand.', 'يمكن حذف that في جملة الصلة: The dress (that) she wore.']
   ]
 };
+LJL.remapSentences(SENTENCES);
 const SENT_LEVELS = [['1', 'مبتدئ'], ['2', 'متوسط'], ['3', 'متقدم']];
 let sLevel = '1', sItem = null, sPool = [], sAns = [], sLocked = false;
 
@@ -1127,7 +1373,7 @@ $('#sentCheck').onclick = () => {
   const fb = $('#sentFb'); sLocked = true; renderSentence();
   if (built === sItem.s) {
     $('#sentAnswer').classList.add('ok');
-    fb.className = 'feedback ok'; fb.innerHTML = `<span class="ltr">Excellent! You built a perfect sentence! ✅</span>`;
+    fb.className = 'feedback ok'; fb.innerHTML = `<span class="ltr">${esc(LJL.ts('perfect', 'Excellent! You built a perfect sentence! ✅'))}</span>`;
     addPoints(5 + (+sLevel) * 5); speak(sItem.s);
   } else {
     $('#sentAnswer').classList.add('bad', 'shake');
@@ -1144,9 +1390,9 @@ setSentLevel('1');
    GAME 3: WORD BUILDER
    ========================================================= */
 const WORD_LEVELS = [['1', '3 حروف'], ['2', '4 حروف'], ['3', '5 حروف'], ['4', '6 حروف فأكثر']];
-const PRAISE = ['Great job!', 'Awesome!', 'Well done!', 'You got it!', 'Perfect!', 'Nice work!'];
-const wordPool = lv => DICT.filter(d => /^[A-Za-z]+$/.test(d.en)).filter(d => {
-  const n = d.en.length; return lv === '1' ? n === 3 : lv === '2' ? n === 4 : lv === '3' ? n === 5 : n >= 6 && n <= 11;
+const PRAISE = LJL.DEF || LJL.T === 'en' ? ['Great job!', 'Awesome!', 'Well done!', 'You got it!', 'Perfect!', 'Nice work!'] : LJL.praise();
+const wordPool = lv => DICT.filter(d => /^\p{L}+$/u.test(LJL.wordCore(d.en))).filter(d => {
+  const n = [...LJL.wordCore(d.en)].length; return lv === '1' ? n === 3 : lv === '2' ? n === 4 : lv === '3' ? n === 5 : n >= 6 && n <= 11;
 }).map(d => d.en);
 let wLevel = '1', wItem = null, wTiles = [], wSlots = [], wFails = 0, wLocked = false;
 
@@ -1154,17 +1400,17 @@ function newWord() {
   const { items, left } = drawFrom('word_' + wLevel, wordPool(wLevel), 1);
   const d = byEn.get(items[0]);
   const c = catOf(d.cat);
-  wItem = { word: d.en.toUpperCase(), ar: d.ar, praise: (d.en.toLowerCase() === 'cat' ? 'Purr-fect! 🐱' : PRAISE[Math.floor(Math.random() * PRAISE.length)] + ' ' + c.icon) };
-  const letters = wItem.word.split('').map((ch, i) => ({ id: i, ch, used: false }));
+  wItem = { word: LJL.upper(LJL.wordCore(d.en)), say: d.en, ar: d.ar, praise: (LJL.T === 'en' && d.en.toLowerCase() === 'cat' ? 'Purr-fect! 🐱' : PRAISE[Math.floor(Math.random() * PRAISE.length)] + ' ' + c.icon) };
+  const letters = [...wItem.word].map((ch, i) => ({ id: i, ch, used: false }));
   let sh, g = 0; do { sh = shuffle(letters); } while (sh.map(x => x.ch).join('') === wItem.word && g++ < 50);
   wTiles = sh; wSlots = []; wFails = 0; wLocked = false;
   $('#wordFb').textContent = ''; $('#wordFb').className = 'feedback';
-  $('#wordClue').innerHTML = `${esc(wItem.ar)}<small>${c.icon} ${esc(c.ar)}، ${wItem.word.length} حروف</small>`;
+  $('#wordClue').innerHTML = `${esc(wItem.ar)}<small>${c.icon} ${esc(c.ar)}، ${[...wItem.word].length} حروف</small>`;
   $('#wordLeft').textContent = `تبقّت ${left} كلمة لم تظهر بعد في هذا المستوى.`;
   renderWord();
 }
 function renderWord() {
-  const n = wItem.word.length;
+  const n = [...wItem.word].length;
   const slots = $('#wordSlots'); slots.className = 'slots';
   slots.innerHTML = Array.from({ length: n }, (_, i) => {
     const t = wSlots[i]; return `<button class="slot ${t ? 'filled' : ''}" data-i="${i}" aria-label="خانة ${i + 1}">${t ? t.ch : ''}</button>`;
@@ -1186,25 +1432,25 @@ function checkWord() {
   if (built === wItem.word) {
     wLocked = true; renderWord(); $('#wordSlots').classList.add('ok');
     fb.className = 'feedback ok'; fb.innerHTML = `<span class="ltr">${esc(wItem.praise)}</span>`;
-    addPoints((+wLevel) * 10); speak(wItem.word.toLowerCase());
+    addPoints((+wLevel) * 10); speak(wItem.say);
     return;
   }
   wFails++;
   $('#wordSlots').classList.add('shake');
   if (wFails >= 3) {
     wLocked = true;
-    wSlots = wItem.word.split('').map((ch, i) => ({ id: 'sol' + i, ch }));
+    wSlots = [...wItem.word].map((ch, i) => ({ id: 'sol' + i, ch }));
     wTiles.forEach(t => t.used = true);
     renderWord();
     fb.className = 'feedback bad'; fb.innerHTML = `الكلمة الصحيحة هي <b class="ltr">${wItem.word}</b>. استمع إليها ببطء ثم جرّب الكلمة التالية.`;
-    speak(wItem.word.toLowerCase(), 0.55);
+    speak(wItem.say, 0.55);
   } else {
     fb.className = 'feedback bad'; fb.textContent = 'ليست الكلمة الصحيحة. أعد ترتيب الحروف.';
     setTimeout(() => { wTiles.forEach(t => t.used = false); wSlots = []; renderWord(); }, 450);
   }
 }
 $('#wordNext').onclick = newWord;
-$('#wordHear').onclick = () => speak(wItem.word.toLowerCase(), 0.6);
+$('#wordHear').onclick = () => speak(wItem.say, 0.6);
 function setWordLevel(v) { wLevel = v; renderLevelChips($('#wordLevels'), WORD_LEVELS, wLevel, setWordLevel); newWord(); }
 setWordLevel('1');
 
@@ -1215,12 +1461,12 @@ let dCat = 'all';
 const norm = s => String(s).toLowerCase().replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
 $('#dictIntro').textContent = `${DICT.length} كلمة في ${CATS.length} فئة. اضغط على أي كلمة لتسمع نطقها بالإنجليزية الأمريكية.`;
 function renderDict() {
-  renderLevelChips($('#dictCats'), [['civq', '🇺🇸 أسئلة الجنسية'], ['civstar', '★ أسئلة 65/20'], ['all', 'الكل']].concat(CATS.map(c => [c.id, `${c.icon} ${c.ar}`])), dCat, v => { dCat = v; renderDict(); });
+  renderLevelChips($('#dictCats'), (LJL.T === 'en' ? [['civq', '🇺🇸 أسئلة الجنسية'], ['civstar', '★ أسئلة 65/20']] : []).concat([['all', 'الكل']]).concat(CATS.map(c => [c.id, `${c.icon} ${c.ar}`])), dCat, v => { dCat = v; renderDict(); });
   const q = norm($('#dictSearch').value.trim());
   if (dCat === 'civq' || dCat === 'civstar') return renderCivicsList(q, dCat === 'civstar');
   const list = DICT.filter(d => (dCat === 'all' || d.cat === dCat) && (!q || norm(d.en).includes(q) || norm(d.ar).includes(q)));
   $('#dictList').innerHTML = list.length
-    ? list.map(d => `<button class="drow" data-en="${esc(d.en)}"><span class="den ltr">${esc(d.en)}</span><span class="dar">${esc(d.ar)}</span><span class="dspk" aria-hidden="true">🔊</span></button>`).join('')
+    ? list.map(d => `<button class="drow" data-en="${esc(d.en)}"><span class="den ltr">${esc(d.en)}${d.lat ? `<span class="dlat">${esc(d.lat)}</span>` : ''}</span><span class="dar">${esc(d.ar)}</span><span class="dspk" aria-hidden="true">🔊</span></button>`).join('')
     : `<p class="dempty">لا توجد كلمة تطابق بحثك. جرّب كلمة أخرى بالعربية أو الإنجليزية، أو اسأل لجين في المحادثة.</p>`;
   $('#dictList').querySelectorAll('.drow').forEach(b => b.onclick = () => speak(b.dataset.en, 0.85));
 }
@@ -1252,6 +1498,10 @@ function renderStyleRows() {
     };
     return;
   }
+  if (LJL.T !== 'en') {
+    for (const id of ['#styleRowText', '#styleRowConvo']) { const el = $(id); if (!el) continue; el.hidden = true; const lb = el.previousElementSibling; if (lb && lb.classList.contains('lbl')) lb.hidden = true; }
+    return;
+  }
   const opts = [['street', '🧢 إنجليزي الشارع'], ['formal', '👔 إنجليزي رسمي']];
   for (const id of ['#styleRowText', '#styleRowConvo']) {
     const el = $(id); if (!el) continue;
@@ -1267,8 +1517,10 @@ const hasAr = s => /[؀-ۿ]/.test(s);
 let arVoice = null;
 function pickArVoice() {
   if (!('speechSynthesis' in window)) return;
-  const vs = speechSynthesis.getVoices().filter(v => (v.lang || '').toLowerCase().startsWith('ar'));
-  arVoice = vs.find(v => /sa|laila|maged|google/i.test(v.lang + v.name)) || vs[0] || null;
+  const all = speechSynthesis.getVoices(), loc = LJL.loc(LJL.N).toLowerCase();
+  let vs = all.filter(v => (v.lang || '').replace('_', '-').toLowerCase().startsWith(loc));
+  if (!vs.length) vs = all.filter(v => (v.lang || '').toLowerCase().startsWith(LJL.N));
+  arVoice = (LJL.N === 'ar' ? vs.find(v => /sa|laila|maged|google/i.test(v.lang + v.name)) : null) || vs[0] || null;
 }
 if ('speechSynthesis' in window) { pickArVoice(); speechSynthesis.addEventListener?.('voiceschanged', pickArVoice); }
 function splitSentences(t) {
@@ -1280,7 +1532,8 @@ function say(text, lang = 'en', rate = 0.95) { ttsSpeak(text, lang, rate); }
 /* one-shot speech recognition in a chosen language, with keyboard-dictation fallback */
 let activeRec = null;
 function listen({ lang, input, btn, onFinal }) {
-  const tipLang = lang === 'ar' ? 'العربية' : 'English';
+  if (micOn) micStop();
+  const tipLang = LJL.name(lang === 'ar' ? LJL.N : LJL.T, LJL.DEF ? 'ar' : LJL.N);
   const fallback = msg => {
     input.focus();
     toast(msg || `استخدم ميكروفون لوحة مفاتيح هاتفك 🎤 (لغة الإملاء: ${tipLang}) ثم اضغط إرسال.`);
@@ -1288,7 +1541,7 @@ function listen({ lang, input, btn, onFinal }) {
   if (activeRec) { try { activeRec.stop(); } catch {} return; }
   if (!SR || micMode === 'keyboard') return fallback();
   if ('speechSynthesis' in window) speechSynthesis.cancel();
-  const r = new SR(); r.lang = lang === 'ar' ? 'ar-SA' : 'en-US'; r.interimResults = true; r.continuous = false;
+  const r = new SR(); r.lang = LJL.loc(lang === 'ar' ? LJL.N : LJL.T); r.interimResults = true; r.continuous = false;
   let final = false; const base = input.value && input.tagName === 'TEXTAREA' ? input.value.trim() + ' ' : '';
   r.onresult = e => { let t = ''; for (const x of e.results) { t += x[0].transcript; if (x.isFinal) final = true; } input.value = base + t; input.dispatchEvent(new Event('input')); };
   r.onend = () => { activeRec = null; btn.classList.remove('listening', 'on'); if (final && onFinal) onFinal(); };
@@ -1318,7 +1571,7 @@ $('#trTabs').querySelectorAll('.chip').forEach(c => c.onclick = () => {
 let trDir = 'auto', trBusy = false, trCtrl = null, trLast = null;
 const TR_DIRS = [['auto', 'تلقائي'], ['ar-en', 'عربي ← إنجليزي'], ['en-ar', 'إنجليزي ← عربي']];
 function setTrDir(v) { trDir = v; renderLevelChips($('#trDirs'), TR_DIRS, trDir, setTrDir); updTrNote(); }
-function resolveDir(t) { return trDir !== 'auto' ? trDir : (hasAr(t) ? 'ar-en' : 'en-ar'); }
+function resolveDir(t) { return trDir !== 'auto' ? trDir : ((LJL.DEF ? hasAr(t) : LJL.isNative(t)) ? 'ar-en' : 'en-ar'); }
 function updTrNote() {
   const t = $('#trInput').value.trim();
   $('#trCount').textContent = t ? `${t.split(/\s+/).length} كلمة` : '';
@@ -1380,9 +1633,9 @@ async function translateText() {
     if (!trLast.sentences.length) throw { code: 'empty' };
     renderTr();
     addPoints(isShort ? 1 : 3);
-    const hist = store.get('lj_trhist', []);
+    const hist = store.get(LJL.savedKey('lj_trhist'), []);
     hist.unshift({ src: text.slice(0, 200), out: fullOut().slice(0, 200), dir, t: Date.now() });
-    store.set('lj_trhist', hist.slice(0, 30));
+    store.set(LJL.savedKey('lj_trhist'), hist.slice(0, 30));
   } catch (e) {
     renderTr(`<div class="err">${sampleErr(e)}</div>`);
   } finally {
@@ -1400,7 +1653,7 @@ function toggleSave(item) {
   let l = savedList();
   if (isSaved(item.en)) l = l.filter(x => x.en.toLowerCase() !== item.en.toLowerCase());
   else { l.unshift({ ...item, t: Date.now(), box: 0, due: Date.now() }); addPoints(2); toast('انحفظت بـ ⭐ محفوظاتي، ورح تطلعلك بالمراجعة'); }
-  store.set('lj_saved', l.slice(0, 500));
+  store.set(LJL.savedKey('lj_saved'), l.slice(0, 500));
 }
 
 function renderTr(extra = '') {
@@ -1463,7 +1716,7 @@ function renderTr(extra = '') {
 /* ---------- saved words + history ---------- */
 function renderSaved() {
   if (reviewing) return renderReview();
-  const l = savedList(), hist = store.get('lj_trhist', []);
+  const l = savedList(), hist = store.get(LJL.savedKey('lj_trhist'), []);
   const due = dueItems().length;
   let html = `<div class="game-head"><div><h2>محفوظاتي</h2><p>كل كلمة أو عبارة بتحفظها بتطلعلك للمراجعة بمواعيد متباعدة لحتى تثبت بذاكرتك.</p></div></div>`;
   if (l.length) html += `<div class="review-bar"><div class="t"><b>${due}</b> ${due === 1 ? 'كلمة' : 'كلمات'} جاهزة للمراجعة اليوم<br><small class="dar">${l.length} محفوظة · ${l.filter(x => (x.box || 0) >= 4).length} صارت ثابتة</small></div>
@@ -1478,7 +1731,7 @@ function renderSaved() {
   }
   const box = $('#savedList'); box.innerHTML = html;
   const rs = $('#revStart'); if (rs) rs.onclick = startReview;
-  box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { const s = savedList(); s.splice(+b.dataset.del, 1); store.set('lj_saved', s); renderSaved(); });
+  box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { const s = savedList(); s.splice(+b.dataset.del, 1); store.set(LJL.savedKey('lj_saved'), s); renderSaved(); });
   box.querySelectorAll('[data-h]').forEach(b => b.onclick = () => {
     $('#trInput').value = hist[+b.dataset.h].src; updTrNote();
     $('#trTabs').querySelector('[data-p="text"]').click(); translateText();
@@ -1494,7 +1747,7 @@ function reviewHit(en, ok) {
   const l = getSaved(); const x = l.find(y => y.en === en); if (!x) return;
   x.box = ok ? Math.min((x.box || 0) + 1, INTERVALS.length - 1) : 0;
   x.due = Date.now() + (ok ? INTERVALS[x.box] * DAY : 10 * 60e3);
-  store.set('lj_saved', l);
+  store.set(LJL.savedKey('lj_saved'), l);
 }
 function startReview() { revQueue = shuffle(dueItems()).slice(0, 20); revDone = 0; reviewing = true; nextCard(); }
 function nextCard() { revCard = revQueue.shift() || null; revShown = false; renderReview(); }
@@ -1534,7 +1787,7 @@ $('#cvClear').onclick = () => { convo = []; renderConvo(); };
 
 function renderConvo() {
   const side = me => {
-    if (!convo.length) return `<div class="side-empty">${me === 'en' ? 'Tap the mic and speak English. Your words appear in Arabic for the other person.' : 'اضغط على الميكروفون وتحدّث بالعربية، وستظهر كلماتك بالإنجليزية للطرف الآخر وتُنطق بصوت أمريكي.'}</div>`;
+    if (!convo.length) return `<div class="side-empty">${me === 'en' ? esc(LJL.ts('empty', 'Tap the mic and speak English. Your words appear in Arabic for the other person.')) : 'اضغط على الميكروفون وتحدّث بالعربية، وستظهر كلماتك بالإنجليزية للطرف الآخر وتُنطق بصوت أمريكي.'}</div>`;
     return convo.map((m, i) => {
       const mine = m.from === me;
       const main = me === 'en' ? m.en : m.ar;
@@ -1764,11 +2017,12 @@ const PHRASES = PHRASES_RAW.map(c => ({ ...c, items: c.rows.trim().split('\n').m
   const [en, ar, pron, note] = l.split('|').map(s => (s || '').trim());
   return { en, ar, pron, note };
 }).filter(x => x.en && x.ar) }));
+LJL.remapPhrases(PHRASES);
 
 /* =========================================================
    ROUND 2: phrasebook, practice, camera, global handlers
    ========================================================= */
-function getSaved() { return store.get('lj_saved', []); }
+function getSaved() { return store.get(LJL.savedKey('lj_saved'), []); }
 const speakPart = en => String(en || '').split('=')[0].trim();
 function practiceBtn(x) {
   return `<button class="spk" data-practice="${esc(speakPart(x.en))}" data-par="${esc(x.ar || '')}" data-ppron="${esc(x.pron || '')}" aria-label="تدرّب على النطق">🎤</button>`;
@@ -1806,6 +2060,7 @@ let prItem = null;
 const EXPAND = { gotta: 'got to', gonna: 'going to', wanna: 'want to', lemme: 'let me', gimme: 'give me', dunno: "don't know", kinda: 'kind of', ya: 'you', cuz: 'because', "'cause": 'because', "y'all": 'you all', 'ok': 'okay' };
 const PRON_S = new Set(['it', 'that', 'what', 'he', 'she', 'there', 'where', 'how', 'who', 'here']);
 function normWords(s) {
+  if (LJL.T !== 'en') return LJL.normWords(s);
   s = String(s).toLowerCase().replace(/[’‘]/g, "'").replace(/(\d)/g, ' $1 ').replace(/[^a-z0-9' ]+/g, ' ');
   const out = [];
   for (let w of s.split(/\s+/).filter(Boolean)) {
@@ -1939,7 +2194,7 @@ let trEngine = 'g';
 async function googleTranslate(text, toEn) {
   const parts = chunkText(text, 1800), out = [];
   for (const p of parts) {
-    const u = 'https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=' + (toEn ? 'ar' : 'en') + '&tl=' + (toEn ? 'en' : 'ar') + '&q=' + encodeURIComponent(p);
+    const u = 'https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=' + (toEn ? LJL.N : LJL.T) + '&tl=' + (toEn ? LJL.T : LJL.N) + '&q=' + encodeURIComponent(p);
     const r = await fetch(u);
     if (!r.ok) throw new Error('http');
     const j = await r.json();
@@ -1948,17 +2203,17 @@ async function googleTranslate(text, toEn) {
     out.push(t);
   }
   let res = out.join(' ');
-  if (toEn) res = res.replace(/\b(?:if )?god willing\b/gi, 'InshaAllah').replace(/\bgod\b/gi, 'Allah').replace(/\bin sha'? ?allah\b/gi, 'InshaAllah');
+  if (toEn && LJL.T === 'en') res = res.replace(/\b(?:if )?god willing\b/gi, 'InshaAllah').replace(/\bgod\b/gi, 'Allah').replace(/\bin sha'? ?allah\b/gi, 'InshaAllah');
   return res;
 }
 function googleTranslateUrl(text, toEn) {
-  return 'https://translate.google.com/?sl=' + (toEn ? 'ar' : 'en') + '&tl=' + (toEn ? 'en' : 'ar') + '&text=' + encodeURIComponent(text || '') + '&op=translate';
+  return 'https://translate.google.com/?sl=' + (toEn ? LJL.N : LJL.T) + '&tl=' + (toEn ? LJL.T : LJL.N) + '&text=' + encodeURIComponent(text || '') + '&op=translate';
 }
 async function mymemoryTranslate(text, toEn) {
   const parts = chunkText(text, 450);
   const out = [];
   for (const p of parts) {
-    const pair = toEn ? 'ar|en-US' : 'en-US|ar';
+    const mm = c => c === 'en' ? 'en-US' : c, pair = toEn ? mm(LJL.N) + '|' + mm(LJL.T) : mm(LJL.T) + '|' + mm(LJL.N);
     const r = await fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(p) + '&langpair=' + pair);
     if (!r.ok) throw new Error('http');
     const j = await r.json();
@@ -1967,7 +2222,7 @@ async function mymemoryTranslate(text, toEn) {
     out.push(t);
   }
   let res = out.join(' ');
-  if (toEn) res = res.replace(/\bgod\b/gi, 'Allah').replace(/\bin sha'? ?allah\b/gi, 'InshaAllah');
+  if (toEn && LJL.T === 'en') res = res.replace(/\bgod\b/gi, 'Allah').replace(/\bin sha'? ?allah\b/gi, 'InshaAllah');
   return res;
 }
 async function basicTranslateText(text, dir) {
@@ -2049,7 +2304,7 @@ function startRec() {
   if (!liveOn || liveRec) return;
   if (liveMode === 'ar2en' && liveSpeaking) return;
   const r = new SR();
-  r.lang = liveMode === 'en2ar' ? 'en-US' : 'ar-SA';
+  r.lang = LJL.loc(liveMode === 'en2ar' ? LJL.T : LJL.N);
   r.continuous = true; r.interimResults = true;
   r.onresult = e => {
     let interim = '';
@@ -2122,7 +2377,7 @@ function ttsSpeak(text, lang = 'en', rate = 0.95, opt = {}) {
     try { ss.resume(); } catch {}
     for (const part of parts) {
       const u = new SpeechSynthesisUtterance(part);
-      u.lang = lang === 'ar' ? 'ar-SA' : 'en-US';
+      u.lang = LJL.loc(lang === 'ar' ? LJL.N : LJL.T);
       const v = lang === 'ar' ? arVoice : voice; if (v) u.voice = v;
       u.rate = rate; u.volume = 1;
       u.onstart = () => { started = true; };
@@ -2155,7 +2410,7 @@ function updDrawer() {
   const p = curSection();
   const sec = DR_SECTIONS.find(s => s.p === p);
   const bits = [sec ? sec.label : ''];
-  if (p === 'text' || p === 'convo' || p === 'live') bits.push((IN_APP ? '🌐 Google' : STYLE_SHORT[enStyle]));
+  if (p === 'text' || p === 'convo' || p === 'live') bits.push((IN_APP || LJL.T !== 'en' ? '🌐 Google' : STYLE_SHORT[enStyle]));
   if (p === 'text') bits.push(DIR_SHORT[trDir]);
   $('#drSum').textContent = bits.filter(Boolean).join(' · ');
   $('#drSections').innerHTML = DR_SECTIONS.map(s => `<button type="button" data-dp="${s.p}" aria-pressed="${s.p === p}">${esc(s.label)}</button>`).join('');
@@ -2179,7 +2434,7 @@ updDrawer();
    ========================================================= */
 const LJ = (() => {
   const pick = a => a[Math.floor(Math.random() * a.length)];
-  const L = s => { const [en, ar] = String(s).split('|'); return { en: (en || '').trim(), ar: (ar || '').trim() }; };
+  const L = s => { const [en, ar] = String(s).split('|'); return LJL.line((en || '').trim(), (ar || '').trim()); };
   const cap1 = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 
   /* ---------- word lists for captures ---------- */
@@ -2385,11 +2640,11 @@ const LJ = (() => {
   ];
   let lowerIWarned = false;
   function grammar(t) {
-    for (const [re, fix, why] of RULES) {
+    for (const [gi, [re, fix, why]] of RULES.entries()) {
       const m = t.match(re);
-      if (m) return { wrong: m[0], right: fix(m), why_ar: why };
+      if (m) return { wrong: m[0], right: fix(m), why_ar: LJL.m('g' + (gi + 1), why) };
     }
-    if (!lowerIWarned && /(^|\s)i(\s|'m|$)/.test(t)) { lowerIWarned = true; return { wrong: 'i', right: 'I', why_ar: 'كلمة I (يعني أنا) دايماً بتنكتب حرف كبير.' }; }
+    if (!lowerIWarned && /(^|\s)i(\s|'m|$)/.test(t)) { lowerIWarned = true; return { wrong: 'i', right: 'I', why_ar: LJL.m('g11', 'كلمة I (يعني أنا) دايماً بتنكتب حرف كبير.') }; }
     return null;
   }
   const STREET = [[/\bI have to\b/i, 'I gotta'], [/\bI am going to\b|\bI'm going to\b/i, "I'm gonna"], [/\bI want to\b/i, 'I wanna'], [/\bI do not know\b|\bI don't know\b/i, 'I dunno'], [/\bI am\b/, "I'm"], [/\bdo not\b/i, "don't"]];
@@ -2430,16 +2685,16 @@ const LJ = (() => {
   }
   function global(t) {
     const low = t.toLowerCase().trim();
-    if (/[؀-ۿ]/.test(t) && !/[a-z]/i.test(t)) {
+    if (LJL.T === 'en' && /[؀-ۿ]/.test(t) && !/[a-z]/i.test(t)) {
       const hits = arabicHelp(t);
       return { say: "Let's try in English! 😊 You can do it. Tap one of the ideas below, or try again. " + st.lastQ.en, ar: 'يلّا نجرّب بالإنجليزي! فيك. اضغط وحدة من الأفكار تحت أو جرّب مرة تانية.' + (hits.length ? ' كلمات بتساعدك: ' + hits.join('، ') : '') + ' — ' + st.lastQ.ar, chips: st.lastChips, stay: true };
     }
     if (/^(what\??|huh\??|sorry\??|again|repeat|say (it|that) again|i don'?t understand|i dont understand|slow(er)?|pardon)\b/.test(low))
-      return { say: 'No problem! ' + st.lastQ.en, ar: 'ولا يهمّك! ' + st.lastQ.ar, chips: st.lastChips, stay: true, slow: true };
+      { const p = L("No problem! | ولا يهمّك!"); return { say: p.en + ' ' + st.lastQ.en, ar: p.ar + ' ' + st.lastQ.ar, chips: st.lastChips, stay: true, slow: true }; }
     if (/^(help|hint|idk|i don'?t know|i dunno|dunno)\W*$/.test(low))
-      return { say: "That's okay! Here are some ideas. " + st.lastQ.en, ar: 'عادي! هي شوية أفكار. ' + st.lastQ.ar, chips: st.lastChips, stay: true };
+      { const p = L("That's okay! Here are some ideas. | عادي! هي شوية أفكار."); return { say: p.en + ' ' + st.lastQ.en, ar: p.ar + ' ' + st.lastQ.ar, chips: st.lastChips, stay: true }; }
     if (/^(bye|goodbye|see ya|see you|good night)\b/.test(low))
-      return { say: 'Bye! It was fun talking to you. See ya soon! 👋', ar: 'باي! كان حلو الحكي معك. بشوفك قريباً!', chips: ['Hi again!'], end: true };
+      { const p = L('Bye! It was fun talking to you. See ya soon! 👋 | باي! كان حلو الحكي معك. بشوفك قريباً!'); return { say: p.en, ar: p.ar, chips: ['Hi again!'], end: true }; }
     return null;
   }
 
@@ -2449,7 +2704,7 @@ const LJ = (() => {
     const g = global(t);
     if (g) return { ...g, correction: null };
     st.turns++;
-    const corr = grammar(t);
+    const corr = LJL.T === 'en' ? grammar(t) : null;
     let reaction = null, tipCorr = null;
 
     if (st.id === 'free') {
@@ -2475,12 +2730,12 @@ const LJ = (() => {
     if (!reaction && turn.cap && x == null && !turn.nd && !turn.dd && !st.retried && !(turn.r || []).length) {
       st.retried = true;
       const hm = L(pick(["Hmm, I didn't catch that. | همم، ما فهمت عليك منيح.", 'Oops, can you say that another way? | أوبس، فيك تقولها بطريقة تانية؟']));
-      return { say: hm.en + ' ' + st.lastQ.en, ar: hm.ar + ' ' + st.lastQ.ar + ' (جرّب وحدة من الأفكار تحت)', chips: st.lastChips, correction: corr, stay: true };
+      return { say: hm.en + ' ' + st.lastQ.en, ar: hm.ar + ' ' + st.lastQ.ar + ' ' + L('(Try one of the ideas below) | (جرّب وحدة من الأفكار تحت)').ar, chips: st.lastChips, correction: corr, stay: true };
     }
     st.retried = false;
     if (!reaction && turn.dd) reaction = line(pick(turn.dd));
     if (!reaction) reaction = L(pick(ACK));
-    if (turn.tip && turn.tip[0].test(t)) tipCorr = { wrong: turn.tip[1], right: turn.tip[2], why_ar: turn.tip[3] };
+    if (LJL.T === 'en' && turn.tip && turn.tip[0].test(t)) tipCorr = { wrong: turn.tip[1], right: turn.tip[2], why_ar: LJL.m('coffeeTip', turn.tip[3]) };
 
     st.i++;
     if (st.i >= sc.turns.length) {
@@ -2501,7 +2756,7 @@ const LJ = (() => {
   }
   const SC_NAMES = { intro: 1, coffee: 1, restaurant: 1, airport: 1, shopping: 1, job: 1, free: 1 };
   function streetTip(t) {
-    for (const [re, s] of STREET) { const m = t.match(re); if (m) return `💡 بالشارع الأمريكان بيقولوا «${s}» بدل «${m[0]}».`; }
+    for (const [re, s] of STREET) { const m = t.match(re); if (m) return LJL.N === 'ar' ? `💡 بالشارع الأمريكان بيقولوا «${s}» بدل «${m[0]}».` : String(LJL.m('street', '')).replace('{a}', s).replace('{b}', m[0]); }
     return '';
   }
   return { start, reply, streetTip, grammar, active: () => !!st, current: () => st };
@@ -2846,6 +3101,7 @@ const QA_PLACES = QA_RAW.map(p => ({ ...p, items: p.rows.trim().split('\n').map(
   const [q, a, w1, w2, qa, aa] = l.split('|').map(s => (s || '').trim());
   return { q, a, wrong: [w1, w2], qa, aa };
 }).filter(x => x.q && x.a) }));
+LJL.remapQA(QA_PLACES);
 
 /* =========================================================
    ROUND 9: citizenship data, Q&A game, citizenship interview,
@@ -2856,14 +3112,15 @@ window.LujainNativeReady = function () {};
 window.__lujainModelProgress = function () {};
 window.__lujainModelError = function () {};
 
-let LANG_SET = false; try { LANG_SET = localStorage.getItem('lj_lang') !== null; } catch {}
-const LANG = store.get('lj_lang', 'ar');
+let LANG_SET = false; try { LANG_SET = localStorage.getItem('lj_native') !== null; } catch {}
+const LANG = LJL.N;
 const isEN = () => LANG === 'en';
 
 /* ---------- civics ---------- */
 const CIVICS = CIVICS_RAW.map(([n, sec, flags, q, qa, a, aa]) => ({ n, sec, q, qa, a, aa,
   star: flags.includes('*'), verify: flags.includes('v'), varies: flags.includes('x'),
   opts: a.split('/').map(s => s.replace(/\.\.\.$/, '').trim()).filter(Boolean) }));
+LJL.remapCivics(CIVICS);
 const showAns = s => s.replace(/\((\d+)\)/g, '\u0001$1\u0002').replace(/[()]/g, '').replace(/\u0001/g, '(').replace(/\u0002/g, ')').replace(/\s+/g, ' ').trim();
 const NUMW2 = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100 };
 const STOPW = new Set('the a an of to in and or for by is are was be it its their they that this with from on at as all any one who what which his her'.split(' '));
@@ -2922,11 +3179,12 @@ function renderCivicsList(q, starOnly) {
       <div class="civ-btns"><button class="mini" data-psay="${esc(c.q)}">🔊 السؤال</button><button class="mini" data-psay="${esc(showAns(c.opts[0]))}">🔊 الجواب</button><button class="mini" data-practice="${esc(showAns(c.opts[0]))}" data-par="${esc(c.aa)}" data-ppron="">🎤 تدرّب</button></div>
     </div>`).join('') : `<p class="dempty">لا توجد كلمة تطابق بحثك. جرّب كلمة أخرى بالعربية أو الإنجليزية، أو اسأل لجين في المحادثة.</p>`);
 }
-$('#dictIntro').textContent = `${DICT.length} كلمة في ${CATS.length} فئة + 128 سؤال الجنسية الأمريكية. اضغط على أي كلمة لتسمع نطقها.`;
+$('#dictIntro').textContent = LJL.T === 'en' ? `${DICT.length} كلمة في ${CATS.length} فئة + 128 سؤال الجنسية الأمريكية. اضغط على أي كلمة لتسمع نطقها.`
+  : LJL.t('{n} كلمة في {m} فئة. اضغط على أي كلمة لتسمع نطقها.').replace('{n}', DICT.length).replace('{m}', CATS.length);
 dCat = 'all'; renderDict();
 
 /* ---------- Q&A game ---------- */
-const QA_ALL = QA_PLACES.concat([{ id: 'citizen', icon: '🇺🇸', ar: 'امتحان الجنسية', en: 'Citizenship test' }]);
+const QA_ALL = QA_PLACES.concat(LJL.T === 'en' ? [{ id: 'citizen', icon: '🇺🇸', ar: 'امتحان الجنسية', en: 'Citizenship test' }] : []);
 let qaPlace = store.get('lj_qaplace', 'coffee');
 if (!QA_ALL.find(p => p.id === qaPlace)) qaPlace = 'coffee';
 let qaCur = null, qaDone = false, test = null;
@@ -2985,7 +3243,7 @@ function pickQa(i) {
   }
   $('#qaAns').innerHTML = `<div class="qa-ans"><b>${right ? '✅ صح!' : '❌ الجواب الصح:'}</b> <span class="ltr">${esc(c.a)}</span><div>${esc(c.aa)}</div>${extra}</div>`;
   addPoints(right ? 10 : 0);
-  speak(right ? c.a : 'The right answer is: ' + c.a, 0.9);
+  speak(right ? c.a : LJL.ts('right', 'The right answer is:') + ' ' + c.a, 0.9);
   if (c.civ && (test.ok >= 12 || test.bad >= 9 || test.n >= 20)) {
     test.over = true;
     const pass = test.ok >= 12;
@@ -3007,17 +3265,17 @@ const CIT = (() => {
   const L2 = (en, ar) => ({ en, ar });
   const pickc = a => a[Math.floor(Math.random() * a.length)];
   const PRE = [
-    { q: L2("Good morning! I'm Officer Lujain. Please stand up and raise your right hand. Do you swear that everything you say today will be the truth?", 'صباح الخير! أنا الموظفة لجين. قوم وارفع إيدك اليمين. بتحلف إنو كل شي رح تقوله اليوم صحيح؟'), chips: ['Yes, I do.', 'I do.'] },
-    { q: L2('Thank you. You can sit down. What is your full name?', 'شكراً، فيك تقعد. شو اسمك الكامل؟'), chips: ['My name is Ali Hassan.', "It's Sara Ahmad."], name: true },
-    { q: L2("Nice to meet you, {name}. Did you bring your green card and your ID?", 'تشرّفنا يا {name}. جبت البطاقة الخضراء والهوية؟'), chips: ['Yes, here they are.', 'Yes, I did.'] },
-    { q: L2("Great. Now let's start the civics test. I'm gonna ask you up to 20 questions, and you need 12 right answers to pass. Are you ready?", 'تمام. هلق منبلّش امتحان المواطنة. رح اسألك لحد 20 سؤال، ولازم تجاوب 12 صح لتنجح. جاهز؟'), chips: ["Yes, I'm ready.", 'Yes.'] },
+    { q: L2("Good morning! I'm Officer Lujain. Please stand up and raise your right hand. Do you swear that everything you say today will be the truth?", LJL.m('cit1', 'صباح الخير! أنا الموظفة لجين. قوم وارفع إيدك اليمين. بتحلف إنو كل شي رح تقوله اليوم صحيح؟')), chips: ['Yes, I do.', 'I do.'] },
+    { q: L2('Thank you. You can sit down. What is your full name?', LJL.m('cit2', 'شكراً، فيك تقعد. شو اسمك الكامل؟')), chips: ['My name is Ali Hassan.', "It's Sara Ahmad."], name: true },
+    { q: L2("Nice to meet you, {name}. Did you bring your green card and your ID?", LJL.m('cit3', 'تشرّفنا يا {name}. جبت البطاقة الخضراء والهوية؟')), chips: ['Yes, here they are.', 'Yes, I did.'] },
+    { q: L2("Great. Now let's start the civics test. I'm gonna ask you up to 20 questions, and you need 12 right answers to pass. Are you ready?", LJL.m('cit4', 'تمام. هلق منبلّش امتحان المواطنة. رح اسألك لحد 20 سؤال، ولازم تجاوب 12 صح لتنجح. جاهز؟')), chips: ["Yes, I'm ready.", 'Yes.'] },
   ];
   function askCiv(prefix) {
     const pool = CIVICS.filter(c => !c.varies && !st.used.has(c.n));
     const c = pickc(pool); st.used.add(c.n); st.cur = c; st.n++;
     const chips = civChoices(c);
     st.chips = chips;
-    return { say: (prefix ? prefix.en + ' ' : '') + `Question ${st.n}. ` + c.q, ar: (prefix ? prefix.ar + ' ' : '') + `السؤال ${st.n}: ` + c.qa, chips: chips.concat(["I don't know."]), rate: 0.85 };
+    return { say: (prefix ? prefix.en + ' ' : '') + `Question ${st.n}. ` + c.q, ar: (prefix ? prefix.ar + ' ' : '') + LJL.m('citQ', 'السؤال {n}: ').replace('{n}', st.n) + c.qa, chips: chips.concat(["I don't know."]), rate: 0.85 };
   }
   function start() {
     st = { step: 0, name: 'friend', used: new Set(), n: 0, ok: 0, bad: 0, cur: null, done: false };
@@ -3028,11 +3286,11 @@ const CIT = (() => {
     const t = String(text).trim(), low = t.toLowerCase();
     if (/[؀-ۿ]/.test(t) && !/[a-z]/i.test(t)) {
       const last = st.step < PRE.length ? PRE[st.step].q : { en: st.cur.q, ar: st.cur.qa };
-      return { say: 'Please answer in English. ' + last.en.replace('{name}', st.name), ar: 'المقابلة بالإنجليزي، جرّب تجاوب بالإنجليزي. ' + last.ar.replace('{name}', st.name), chips: st.step < PRE.length ? PRE[st.step].chips : st.chips.concat(["I don't know."]), rate: 0.85 };
+      return { say: 'Please answer in English. ' + last.en.replace('{name}', st.name), ar: LJL.m('citEn', 'المقابلة بالإنجليزي، جرّب تجاوب بالإنجليزي. ') + last.ar.replace('{name}', st.name), chips: st.step < PRE.length ? PRE[st.step].chips : st.chips.concat(["I don't know."]), rate: 0.85 };
     }
     if (/^(what\??|sorry\??|pardon|repeat|again|can you repeat|say (it|that) again)/.test(low)) {
       const last = st.step < PRE.length ? PRE[st.step].q : { en: st.cur.q, ar: st.cur.qa };
-      return { say: 'Sure. ' + last.en.replace('{name}', st.name), ar: 'أكيد. ' + last.ar.replace('{name}', st.name), chips: st.step < PRE.length ? PRE[st.step].chips : st.chips.concat(["I don't know."]), rate: 0.7 };
+      return { say: 'Sure. ' + last.en.replace('{name}', st.name), ar: LJL.m('citSure', 'أكيد. ') + last.ar.replace('{name}', st.name), chips: st.step < PRE.length ? PRE[st.step].chips : st.chips.concat(["I don't know."]), rate: 0.7 };
     }
     if (st.step < PRE.length) {
       const p = PRE[st.step];
@@ -3041,18 +3299,18 @@ const CIT = (() => {
       if (st.step < PRE.length) { const n = PRE[st.step]; return { say: n.q.en.replace('{name}', st.name), ar: n.q.ar.replace('{name}', st.name), chips: n.chips, rate: 0.9 }; }
       return askCiv();
     }
-    if (st.done) { return { say: 'Have a nice day!', ar: 'نهارك سعيد!', chips: [], nextIds: ['citizen', 'intro', 'free'] }; }
+    if (st.done) { return { say: 'Have a nice day!', ar: LJL.m('citDay', 'نهارك سعيد!'), chips: [], nextIds: ['citizen', 'intro', 'free'] }; }
     const c = st.cur;
     const dunno = /^(i don'?t know|idk|i dunno|skip|pass|no idea)/.test(low);
     const right = !dunno && civCheck(t, c);
     right ? st.ok++ : st.bad++;
-    const fb = right ? L2(pickc(["That's correct.", 'Correct!', 'Good, that\'s right.']), 'صح! ✅')
-      : L2(`That's not correct. The answer is: ${civRight(c)}.`, `مو صح. الجواب: ${c.aa}`);
+    const fb = right ? L2(pickc(["That's correct.", 'Correct!', 'Good, that\'s right.']), LJL.m('citOk', 'صح! ✅'))
+      : L2(`That's not correct. The answer is: ${civRight(c)}.`, LJL.m('citNo', 'مو صح. الجواب: {a}').replace('{a}', c.aa || civRight(c)));
     if (st.ok >= 12 || st.bad >= 9 || st.n >= 20) {
       st.done = true;
       const pass = st.ok >= 12;
       return { right, say: fb.en + (pass ? ` Congratulations, ${st.name}! You passed the civics test. You got ${st.ok} right. Welcome to the next step!` : ` You got ${st.ok} right, and you need 12 to pass. Don't worry, keep practicing and try again!`),
-        ar: fb.ar + (pass ? ` مبروك يا ${st.name}! نجحت بامتحان المواطنة 🎉🇺🇸 جاوبت ${st.ok} صح.` : ` جاوبت ${st.ok} صح، وبدك 12 لتنجح. ولا يهمّك، كمّل تدريب وجرّب مرة تانية! 💪`),
+        ar: fb.ar + (pass ? LJL.m('citPass', ' مبروك يا {name}! نجحت بامتحان المواطنة 🎉🇺🇸 جاوبت {ok} صح.').replace('{name}', st.name).replace('{ok}', st.ok) : LJL.m('citFail', ' جاوبت {ok} صح، وبدك 12 لتنجح. ولا يهمّك، كمّل تدريب وجرّب مرة تانية! 💪').replace('{ok}', st.ok)),
         chips: [], nextIds: ['citizen', 'intro', 'free'], rate: 0.9, correction: null };
     }
     const r = askCiv(fb);
@@ -3069,7 +3327,7 @@ $('#micErrModal').addEventListener('click', e => { if (e.target.id === 'micErrMo
 $('#micErrSettings').onclick = () => { $('#micErrModal').classList.remove('open'); try { window.LujainSpeech.openSettings(); } catch {} };
 $('#micErrKb').onclick = () => { $('#micErrModal').classList.remove('open'); toast(KB_TIP); const i = $('#textInput'); if (i && i.offsetParent) i.focus(); };
 
-$('#verTag').textContent = 'v1.1.1 · ' + (IN_APP ? 'app ✅' : (WV_NO_BRIDGE ? 'app ❌ no mic layer' : 'web'));
+$('#verTag').textContent = 'v1.2.1 · ' + (IN_APP ? 'app ✅' : (WV_NO_BRIDGE ? 'app ❌ no mic layer' : 'web'));
 $('#micTestBtn').onclick = () => {
   const box = $('#micDiag'), N = window.LujainSpeech, yes = '✅', no = '❌';
   const lines = [];
@@ -3086,7 +3344,7 @@ $('#micTestBtn').onclick = () => {
   }
   if (!SR) { show(); return; }
   lines.push('🎤 ' + T('احكي هلق: Hello')); show();
-  const r = new SR(); r.lang = 'en-US'; r.interimResults = true; r.continuous = false;
+  const r = new SR(); r.lang = LJL.loc(LJL.T); r.interimResults = true; r.continuous = false;
   let heard = '', err = '';
   const done = setTimeout(() => { try { r.abort(); } catch {} }, 8000);
   r.onresult = e => { heard = [...e.results].map(x => x[0].transcript).join(''); };
@@ -3109,7 +3367,7 @@ $('#micTestBtn').onclick = () => {
   store.set('lj_mic_asked', true);
   setTimeout(() => {
     try {
-      const r = new SR(); r.lang = 'en-US'; r.interimResults = false; r.continuous = false;
+      const r = new SR(); r.lang = LJL.loc(LJL.T); r.interimResults = false; r.continuous = false;
       const off = () => { try { r.abort(); } catch {} };
       r.onstart = off; r.onresult = off; r.onerror = () => {}; r.onend = () => {};
       r.start();
@@ -3119,14 +3377,20 @@ $('#micTestBtn').onclick = () => {
 
 /* ---------- settings ---------- */
 function renderSettings() {
-  $('#langSeg').querySelectorAll('[data-lang]').forEach(b => b.setAttribute('aria-pressed', b.dataset.lang === LANG));
+  const opt = (sel, cur, other) => { $(sel).innerHTML = LJL.LIST.map(c => `<option value="${c}" ${c === cur ? 'selected' : ''}>${LJL.FLAG[c]} ${esc(LJL.SELF[c])}</option>`).join(''); };
+  opt('#setNative', LJL.N); opt('#setTarget', LJL.T);
   $('#sndSeg').querySelectorAll('[data-snd]').forEach(b => b.setAttribute('aria-pressed', (b.dataset.snd === '1') === soundOn));
   $('#setOnline').checked = store.get('lj_online_tr', true);
 }
 $('#setBtn').onclick = () => { renderSettings(); $('#setModal').classList.add('open'); };
 $('#setClose').onclick = () => $('#setModal').classList.remove('open');
 $('#setModal').addEventListener('click', e => { if (e.target.id === 'setModal') $('#setModal').classList.remove('open'); });
-$('#langSeg').querySelectorAll('[data-lang]').forEach(b => b.onclick = () => { if (b.dataset.lang === LANG) return; store.set('lj_lang', b.dataset.lang); location.reload(); });
+function setPair(n, t) {
+  if (n === t) t = n === 'en' ? 'ar' : 'en';
+  store.set('lj_native', n); store.set('lj_target', t); location.reload();
+}
+$('#setNative').onchange = e => { const n = e.target.value; setPair(n, n === LJL.T ? LJL.N : LJL.T); };
+$('#setTarget').onchange = e => { const t = e.target.value; setPair(t === LJL.N ? LJL.T : LJL.N, t); };
 $('#sndSeg').querySelectorAll('[data-snd]').forEach(b => b.onclick = () => { soundOn = b.dataset.snd === '1'; store.set('lj_sound', soundOn); if (!soundOn && 'speechSynthesis' in window) speechSynthesis.cancel(); renderSound(); renderSettings(); });
 $('#setOnline').onchange = e => { store.set('lj_online_tr', e.target.checked); toast(e.target.checked ? '🌐 الترجمة عبر الإنترنت مفعّلة' : 'الترجمة عبر الإنترنت مسكّرة'); };
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#setModal').classList.remove('open'); });
@@ -3291,29 +3555,31 @@ const I18N_RX = [
   [/^(?:كلمة|كلمات) جاهزة للمراجعة اليوم$/, 'ready to review today'],
   [/^(\d+) محفوظة · (\d+) صارت ثابتة$/, '$1 saved · $2 mastered'],
   [/^▶ (.+)$/, (m, a) => '▶ ' + tr(a)],
-  [/^(.+)، (\d+) حروف$/, (m, a, n) => tr(a) + ', ' + n + ' letters'],
+  [/^(.+)، (\d+) حروف$/, (m, a, n) => tr(a) + ', ' + n + ' ' + LJL.word('letters')],
   [/^(.+) · (.+)$/, (m) => m.split(' · ').map(tr).join(' · ')],
 ];
+const UI = LJL.uiMap(I18N), UI_RX = LJL.uiRx(I18N_RX);
 function tr(s) {
-  if (!isEN() || !s) return s;
+  if (!UI || !s) return s;
   const t = String(s).trim();
-  if (I18N[t]) return String(s).replace(t, I18N[t]);
-  for (const [rx, to] of I18N_RX) { if (rx.test(t)) return String(s).replace(t, t.replace(rx, to)); }
+  if (UI[t] != null) return String(s).replace(t, UI[t]);
+  for (const [rx, to] of UI_RX) { if (rx.test(t)) return String(s).replace(t, t.replace(rx, to)); }
   return s;
 }
+const TR_SKIP = LJL.script(LJL.T) === 'arab' ? '.ltr,.qa-opt,.bchip,.word,.tile,.slot,.card,#sideEn,.prow .en,.dlat,.civ-q,.civ-a,[data-notr]' : '[data-notr]';
 function trNode(n) {
-  if (n.nodeType === 3) { const v = n.nodeValue; if (v && /[؀-ۿ]/.test(v)) { const r = tr(v); if (r !== v) n.nodeValue = r; } return; }
-  if (n.nodeType !== 1 || n.closest?.('script,style')) return;
+  if (n.nodeType === 3) { const v = n.nodeValue; if (v && /[؀-ۿ]/.test(v) && !n.parentElement?.closest(TR_SKIP)) { const r = tr(v); if (r !== v) n.nodeValue = r; } return; }
+  if (n.nodeType !== 1 || n.closest?.('script,style') || n.closest?.(TR_SKIP)) return;
   for (const a of ['placeholder', 'aria-label', 'title']) { const v = n.getAttribute?.(a); if (v && /[؀-ۿ]/.test(v)) { const r = tr(v); if (r !== v) n.setAttribute(a, r); } }
   const w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
   let x; while ((x = w.nextNode())) {
-    if (x.nodeType === 3) { const v = x.nodeValue; if (v && /[؀-ۿ]/.test(v)) { const r = tr(v); if (r !== v) x.nodeValue = r; } }
-    else for (const a of ['placeholder', 'aria-label', 'title']) { const v = x.getAttribute(a); if (v && /[؀-ۿ]/.test(v)) { const r = tr(v); if (r !== v) x.setAttribute(a, r); } }
+    if (x.nodeType === 3) { const v = x.nodeValue; if (v && /[؀-ۿ]/.test(v) && !x.parentElement?.closest(TR_SKIP)) { const r = tr(v); if (r !== v) x.nodeValue = r; } }
+    else if (!x.closest(TR_SKIP)) for (const a of ['placeholder', 'aria-label', 'title']) { const v = x.getAttribute(a); if (v && /[؀-ۿ]/.test(v)) { const r = tr(v); if (r !== v) x.setAttribute(a, r); } }
   }
 }
-if (isEN()) {
-  document.documentElement.lang = 'en'; document.documentElement.dir = 'ltr';
-  document.title = 'Lujain: Learn American English';
+if (UI) {
+  document.documentElement.lang = LJL.N; document.documentElement.dir = LJL.RTL.has(LJL.N) ? 'rtl' : 'ltr';
+  if (LJL.N !== 'ar') document.title = LJL.name(LJL.T, LJL.N) + ' · ' + tr('لجين');
   const _confirm = window.confirm.bind(window);
   window.confirm = m => _confirm(tr(m));
   trNode(document.body);
@@ -3322,23 +3588,88 @@ if (isEN()) {
   renderQaPlaces();
 }
 
-/* ---------- first launch: choose the language ---------- */
+/* ---------- first launch: choose my language + the language to learn ---------- */
 if (!LANG_SET) {
+  const guess = (navigator.language || 'ar').slice(0, 2).toLowerCase();
+  let pn = LJL.LIST.includes(guess) ? guess : 'ar', pt = pn === 'en' ? 'ar' : 'en';
+  const btns = (k, cur, dis) => LJL.LIST.map(c => `<button type="button" data-${k}="${c}" aria-pressed="${c === cur}" ${c === dis ? 'disabled' : ''}>${LJL.FLAG[c]} ${esc(LJL.SELF[c])}</button>`).join('');
   document.body.insertAdjacentHTML('beforeend', `<div class="modal open" id="langModal" role="dialog" aria-modal="true">
-    <div class="sheet" style="text-align:center">
-      <div class="avatar" style="margin:6px auto 10px;width:56px;height:56px;font-size:26px">ل</div>
-      <h3 style="margin:0 0 4px">اختار اللغة · Choose your language</h3>
-      <p class="hint" style="padding:0 0 14px">فيك تغيّرها بعدين من ⚙️ · You can change it later in ⚙️</p>
-      <div class="actions" style="justify-content:center;flex-direction:column">
-        <button class="primary" data-first="ar" style="font-size:18px">العربية</button>
-        <button class="ghost" data-first="en" style="font-size:18px">English</button>
-      </div>
+    <div class="sheet" style="text-align:center;max-height:92vh;overflow:auto">
+      <div class="avatar" style="margin:6px auto 10px;width:64px;height:64px"><img src="icons/lujain-face.jpg" alt=""></div>
+      <h3 style="margin:0 0 4px">اختار لغتك · Choose your language</h3>
+      <div class="lhead">🗣 لغتي · My language</div><div class="lpick" id="pickN"></div>
+      <div class="lhead">🎯 بدّي إتعلّم · I want to learn</div><div class="lpick" id="pickT"></div>
+      <div class="actions" style="justify-content:center"><button class="primary" id="pickGo" style="font-size:18px;min-width:60%">✓ يلّا · Start</button></div>
     </div></div>`);
-  document.querySelectorAll('[data-first]').forEach(b => b.onclick = () => {
-    store.set('lj_lang', b.dataset.first);
-    if (b.dataset.first !== LANG) location.reload(); else document.getElementById('langModal').remove();
-  });
+  const paint = () => { $('#pickN').innerHTML = btns('n', pn, ''); $('#pickT').innerHTML = btns('t', pt, pn);
+    document.querySelectorAll('#pickN [data-n]').forEach(b => b.onclick = () => { pn = b.dataset.n; if (pt === pn) pt = pn === 'en' ? 'ar' : 'en'; paint(); });
+    document.querySelectorAll('#pickT [data-t]').forEach(b => b.onclick = () => { pt = b.dataset.t; paint(); }); };
+  paint();
+  $('#pickGo').onclick = () => {
+    store.set('lj_native', pn); store.set('lj_target', pt);
+    if (pn !== LJL.N || pt !== LJL.T) location.reload(); else document.getElementById('langModal').remove();
+  };
 }
+
+/* ---------- texts that belong to the language being learned ---------- */
+if (!LJL.DEF) {
+  $('#hiTxt').textContent = LJL.ts('hi', "Hi! I'm Lujain");
+  $('#textInput').placeholder = LJL.ts('typein', 'Type in English…');
+  $('#inEn').placeholder = LJL.ts('typeorspeak', 'Speak or type in English…');
+  $('#inEn').setAttribute('aria-label', LJL.ts('msg', 'English message'));
+  $('#micEn').setAttribute('aria-label', LJL.ts('speak', 'Speak English'));
+  $('#sideEn .who').textContent = LJL.ts('speaker', 'English speaker');
+  $('#sideEn .side-head span').textContent = LJL.FLAG[LJL.T];
+  $('#sideAr .side-head span').textContent = LJL.FLAG[LJL.N];
+  $('#sideEn').dir = LJL.RTL.has(LJL.T) ? 'rtl' : 'ltr';
+  $('#sideAr').dir = LJL.RTL.has(LJL.N) ? 'rtl' : 'ltr';
+  $('#trMicEn').textContent = '🎙 ' + LJL.name(LJL.T, LJL.N);
+  $('#prIn').placeholder = tr('ما قلته') + '…';
+  renderConvo();
+}
+</script>
+
+<!-- PWA: offline + iPhone install hint -->
+<div id="pwaHint" dir="rtl" role="dialog" aria-label="تثبيت التطبيق"
+  style="position:fixed;inset-inline:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:9999;max-width:460px;margin:0 auto;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:0 10px 30px rgba(0,0,0,.18);display:none;gap:12px;align-items:flex-start">
+  <img src="icons/icon-192.png" alt="" width="48" height="48" style="border-radius:12px;flex-shrink:0">
+  <div style="flex:1;font-size:14px;line-height:1.6">
+    <b id="pwaT">ثبّت لجين عالشاشة الرئيسية 📲</b><br>
+    <span style="color:var(--muted)" id="pwaB">اضغط زر المشاركة <span aria-hidden="true" style="display:inline-block;border:1.5px solid currentColor;border-radius:4px;padding:0 4px;font-size:12px">⬆</span> تحت بـ Safari، وبعدين اختار «إضافة إلى الشاشة الرئيسية». هيك بيفتح متل أي تطبيق وبيشتغل بلا إنترنت.</span>
+  </div>
+  <button id="pwaHintX" aria-label="إغلاق" style="border:0;background:transparent;font-size:20px;line-height:1;padding:4px;color:var(--muted)">×</button>
+</div>
+<script>
+(function(){
+  if (window.LUJAIN_APP && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); }).catch(function () {});
+  } else if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });
+  }
+  var ua = navigator.userAgent;
+  var iOS = /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var standalone = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  var dismissed = false; try { dismissed = localStorage.getItem('lj_pwa_hint') === '1'; } catch(e){}
+  if (iOS && !standalone && !dismissed && !window.LUJAIN_APP) {
+    var h = document.getElementById('pwaHint');
+    var HL = { en: ['Add Lujain to your Home Screen 📲', 'In Safari, tap the Share button ⬆, then “Add to Home Screen”. It opens like an app and works offline.'],
+      es: ['Agrega Lujain a tu pantalla de inicio 📲', 'En Safari, toca Compartir ⬆ y luego «Agregar a inicio». Se abre como una app y funciona sin internet.'],
+      fr: ['Ajoute Lujain à ton écran d’accueil 📲', 'Dans Safari, appuie sur Partager ⬆ puis « Sur l’écran d’accueil ». Elle s’ouvre comme une appli et marche hors ligne.'],
+      tr: ['Lujain’i ana ekrana ekle 📲', 'Safari’de Paylaş ⬆ düğmesine dokun, sonra “Ana Ekrana Ekle”yi seç. Uygulama gibi açılır ve internetsiz çalışır.'],
+      ur: ['لجین کو ہوم اسکرین پر لگائیں 📲', 'سفاری میں شیئر ⬆ دبائیں، پھر "Add to Home Screen" چنیں۔ یہ ایپ کی طرح کھلے گی اور انٹرنیٹ کے بغیر چلے گی۔'],
+      fa: ['لُجین رو به صفحه اصلی اضافه کن 📲', 'توی سافاری دکمه اشتراک‌گذاری ⬆ رو بزن، بعد «افزودن به صفحه اصلی» رو انتخاب کن. مثل یه برنامه باز می‌شه و آفلاین کار می‌کنه.'],
+      ru: ['Добавь Луджайн на экран «Домой» 📲', 'В Safari нажми «Поделиться» ⬆, затем «На экран „Домой“». Откроется как приложение и работает без интернета.'],
+      de: ['Lujain zum Home-Bildschirm hinzufügen 📲', 'Tippe in Safari auf Teilen ⬆ und dann auf „Zum Home-Bildschirm“. Sie öffnet sich wie eine App und läuft offline.'],
+      pt: ['Adicione a Lujain à tela de início 📲', 'No Safari, toque em Compartilhar ⬆ e depois em “Adicionar à Tela de Início”. Abre como um app e funciona sem internet.'] };
+    var hl = typeof LJL !== 'undefined' ? HL[LJL.N] : null;
+    if (hl) { document.getElementById('pwaT').textContent = hl[0]; document.getElementById('pwaB').textContent = hl[1]; h.dir = (LJL.RTL.has(LJL.N) ? 'rtl' : 'ltr'); }
+    var tries = 0, t = setInterval(function(){
+      var ready = false; try { ready = localStorage.getItem('lj_lang') !== null; } catch(e){ ready = true; }
+      if (ready || ++tries > 150) { clearInterval(t); setTimeout(function(){ h.style.display = 'flex'; }, 1500); }
+    }, 2000);
+    document.getElementById('pwaHintX').onclick = function(){ h.style.display = 'none'; try { localStorage.setItem('lj_pwa_hint','1'); } catch(e){} };
+  }
+})();
 </script>
 </body>
 </html>

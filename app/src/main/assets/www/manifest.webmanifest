@@ -1,0 +1,18 @@
+{
+  "name": "تعلّم الإنجليزية مع لجين",
+  "short_name": "لجين",
+  "description": "تعلّم الإنجليزية الأمريكية بالشامي مع لجين",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0B2560",
+  "background_color": "#EEF1F7",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -31,7 +31,7 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
-          mkdir -p out && cp app/build/outputs/apk/debug/app-debug.apk out/Lujain-1.1.1-test.apk
+          mkdir -p out && cp app/build/outputs/apk/debug/app-debug.apk out/Lujain-1.2.1-test.apk
 
       - name: Build signed APK + AAB (only with secrets)
         if: ${{ env.KEYSTORE_BASE64 != '' }}
@@ -43,15 +43,15 @@ jobs:
         run: |
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload-keystore.jks"
           ./gradlew --no-daemon assembleRelease bundleRelease
-          cp app/build/outputs/apk/release/app-release.apk out/Lujain-1.1.1.apk
-          cp app/build/outputs/bundle/release/app-release.aab out/Lujain-1.1.1.aab
+          cp app/build/outputs/apk/release/app-release.apk out/Lujain-1.2.1.apk
+          cp app/build/outputs/bundle/release/app-release.aab out/Lujain-1.2.1.aab
 
       - name: Publish release
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           TAG="build-${{ github.run_number }}"
-          gh release create "$TAG" out/* --target "${{ github.sha }}" --title "Lujain 1.1.1 (build ${{ github.run_number }})" \
-            --notes "ثبّت Lujain-1.1.1-test.apk على موبايلك. إذا في نسخة قديمة مثبّتة بمفتاح تاني، امسحها أول."
+          gh release create "$TAG" out/* --target "${{ github.sha }}" --title "Lujain 1.2.1 (build ${{ github.run_number }})" \
+            --notes "ثبّت Lujain-1.2.1-test.apk على موبايلك. إذا في نسخة قديمة مثبّتة بمفتاح تاني، امسحها أول."
 
       - name: Keep a copy on branch apk-out
         run: |
