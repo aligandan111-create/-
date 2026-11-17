@@ -1,205 +1,155 @@
 package com.bequeen.lujain
 
-import android.content.ComponentName
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.speech.RecognitionListener
-import android.speech.RecognitionService
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import androidx.core.content.ContextCompat
 import org.json.JSONObject
 
 /**
- * Speech recognition for the WebView (exposed to JS as "LujainSpeech").
- * bridge.js turns it into a standard window.SpeechRecognition, so the web code is unchanged.
+ * Speech recognition for the WebView, exposed to JS as "LujainSpeech" (API A).
+ * assets/www/bridge.js turns it into a standard window.SpeechRecognition.
  *
- *   start(lang, continuous, interim) / stop() / abort()  -> window.__lujainSR(type, text, isFinal)
- *   hasPermission(), isAvailable(), openSettings(), engine()
+ *   startListen(id, lang, interim, continuous)
+ *   stopListen(id)
+ *   -> window.__lujainSpeechEvent(id, type, payloadJson)   type: start | partial | final | error | end
+ *      partial/final payload {"text":"..."}, error payload {"error":"<name>"}
  *
- * 1.2.1 fixes for "the mic keeps saying it needs internet":
- *  - ONE recognizer is kept and reused. Destroying and recreating it for every phrase makes Google's
- *    service drop the connection (error 11 "server disconnected"), which used to show up as "network".
- *  - Google's own recognition service is preferred when it is installed (some phones default to
- *    another engine that only works online or with its own assistant switched on).
- *  - Short failures are retried here, quietly: a dropped service is rebuilt, a network failure is
- *    retried offline (downloaded languages / on-device recognizer on Android 13+).
- *  - Every listening session has a number, so a late callback from an old session can never end
- *    the new one.
+ * The SpeechRecognizer is created and used ONLY on the main thread (JS calls arrive on a
+ * background thread and are posted to the main looper).
+ *
+ * Extra helpers (not part of the contract, used by the page's mic check / error sheet):
+ *   hasPermission(), isAvailable(), openSettings()
  */
 class SpeechBridge(private val activity: MainActivity, private val webView: WebView) {
 
+    private val main = Handler(Looper.getMainLooper())
     private var recognizer: SpeechRecognizer? = null
-    private var onDevice = false
+    private var curId: String? = null          // the session events belong to; null = nothing running
     private var lang = "en-US"
+    private var interim = true
     private var continuous = false
-    private var active = false
-    private var session = 0
-    private var retries = 0
-    private var preferOffline = false
-    private var heardSomething = false
 
     @JavascriptInterface
-    fun hasPermission(): Boolean = activity.hasMic()
+    fun hasPermission(): Boolean =
+        ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     @JavascriptInterface
-    fun isAvailable(): Boolean =
-        SpeechRecognizer.isRecognitionAvailable(activity) ||
-            (Build.VERSION.SDK_INT >= 33 && SpeechRecognizer.isOnDeviceRecognitionAvailable(activity))
-
-    /** Which engine is in use, for the in-app mic check. */
-    @JavascriptInterface
-    fun engine(): String = if (onDevice) "on-device" else (googleService()?.packageName ?: "default")
+    fun isAvailable(): Boolean = SpeechRecognizer.isRecognitionAvailable(activity)
 
     @JavascriptInterface
     fun openSettings() {
-        activity.runOnUiThread {
+        main.post {
             runCatching {
-                activity.startActivity(
-                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", activity.packageName, null))
-                )
+                activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", activity.packageName, null)))
             }
         }
     }
 
     @JavascriptInterface
-    fun start(lang: String, continuous: Boolean, interim: Boolean) {
-        activity.runOnUiThread {
-            val my = ++session                       // anything still running belongs to an older session
-            if (active) { active = false; runCatching { recognizer?.cancel() } }
-            activity.ensureMic { granted ->
-                if (my != session) return@ensureMic
-                if (!granted) { emit("error", "not-allowed"); emit("end"); return@ensureMic }
-                if (!isAvailable()) { emit("error", "service-not-allowed"); emit("end"); return@ensureMic }
-                this.lang = lang.ifBlank { "en-US" }; this.continuous = continuous
-                active = true; retries = 0; preferOffline = false; heardSomething = false
-                listen()
-            }
+    fun startListen(id: String, lang: String, interim: Boolean, continuous: Boolean) {
+        main.post {
+            curId?.let { old -> cancelSession(old) }          // a new session replaces any running one
+            if (!hasPermission()) { emit(id, "error", err("not-allowed")); emit(id, "end"); return@post }
+            if (!isAvailable()) { emit(id, "error", err("service-not-allowed")); emit(id, "end"); return@post }
+            curId = id
+            this.lang = lang.ifBlank { "en-US" }
+            this.interim = interim
+            this.continuous = continuous
+            listen()
         }
     }
 
     @JavascriptInterface
-    fun stop() { activity.runOnUiThread { if (active) { continuous = false; recognizer?.stopListening() } } }
+    fun stopListen(id: String) {
+        main.post { if (curId == id) cancelSession(id) }
+    }
 
-    @JavascriptInterface
-    fun abort() { activity.runOnUiThread { abortFromNative() } }
-
-    fun abortFromNative() {
-        session++
-        if (!active) return
-        active = false
+    /** Cancel and send "end" exactly once; later callbacks for this id are ignored. */
+    private fun cancelSession(id: String) {
+        curId = null
         runCatching { recognizer?.cancel() }
-        emit("end")
+        emit(id, "end")
     }
 
-    fun destroy() { session++; active = false; runCatching { recognizer?.destroy() }; recognizer = null }
+    /** Called from the Activity (onPause). */
+    fun stopFromNative() { main.post { curId?.let { cancelSession(it) } } }
 
-    private fun googleService(): ComponentName? {
-        val list = runCatching {
-            activity.packageManager.queryIntentServices(Intent(RecognitionService.SERVICE_INTERFACE), 0)
-        }.getOrNull().orEmpty()
-        val prefer = listOf("com.google.android.googlequicksearchbox", "com.google.android.tts", "com.google.android.as")
-        for (p in prefer) list.firstOrNull { it.serviceInfo?.packageName == p }?.let {
-            return ComponentName(it.serviceInfo.packageName, it.serviceInfo.name)
-        }
-        return null
-    }
-
-    private fun build(useOnDevice: Boolean) {
+    /** Called from the Activity (onDestroy). */
+    fun destroy() {                                    // onDestroy runs on the main thread
+        curId = null
+        main.removeCallbacksAndMessages(null)
         runCatching { recognizer?.destroy() }
-        onDevice = useOnDevice
-        recognizer = when {
-            useOnDevice && Build.VERSION.SDK_INT >= 33 -> SpeechRecognizer.createOnDeviceSpeechRecognizer(activity)
-            !SpeechRecognizer.isRecognitionAvailable(activity) && Build.VERSION.SDK_INT >= 33 &&
-                SpeechRecognizer.isOnDeviceRecognitionAvailable(activity) -> { onDevice = true; SpeechRecognizer.createOnDeviceSpeechRecognizer(activity) }
-            else -> googleService()?.let { SpeechRecognizer.createSpeechRecognizer(activity, it) }
-                ?: SpeechRecognizer.createSpeechRecognizer(activity)
-        }
-        val my = session
-        recognizer?.setRecognitionListener(Listener(my))
+        recognizer = null
     }
 
     private fun listen() {
-        if (recognizer == null) build(false)
-        else recognizer?.setRecognitionListener(Listener(session))
+        val id = curId ?: return
+        if (recognizer == null) {
+            recognizer = SpeechRecognizer.createSpeechRecognizer(activity).also { it.setRecognitionListener(listener) }
+        }
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, lang)
-            .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, interim)
             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, activity.packageName)
-            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, preferOffline)
-        try { recognizer?.startListening(intent) }
-        catch (t: Throwable) { retryOrFail("aborted", rebuild = true) }
-    }
-
-    /** Try again quietly a couple of times before telling the page. */
-    private fun retryOrFail(code: String, rebuild: Boolean, offline: Boolean = false) {
-        if (!active) return
-        if (retries < 2) {
-            retries++
-            if (offline) {
-                preferOffline = true
-                if (Build.VERSION.SDK_INT >= 33 && SpeechRecognizer.isOnDeviceRecognitionAvailable(activity) && !onDevice) build(true)
-            } else if (rebuild) build(onDevice)
-            val my = session
-            webView.postDelayed({ if (active && my == session) listen() }, 400L * retries)
-            return
+        try {
+            recognizer?.startListening(intent)
+        } catch (t: Throwable) {
+            curId = null
+            emit(id, "error", err("aborted")); emit(id, "end")
         }
-        active = false
-        emit("error", code)
-        emit("end")
     }
 
-    private fun phraseDone() {
-        retries = 0
-        if (active && continuous) webView.postDelayed({ if (active) listen() }, 200)
-        else { active = false; emit("end") }
-    }
+    private val listener = object : RecognitionListener {
+        override fun onReadyForSpeech(params: Bundle?) { curId?.let { emit(it, "start") } }
 
-    private inner class Listener(private val my: Int) : RecognitionListener {
-        private fun stale() = my != session
-        override fun onReadyForSpeech(params: Bundle?) { if (!stale()) emit("start") }
         override fun onPartialResults(partial: Bundle?) {
-            if (stale()) return
+            val id = curId ?: return
             val t = partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-            if (t.isNotBlank()) { heardSomething = true; emit("result", t, false) }
+            if (t.isNotBlank()) emit(id, "partial", text(t))
         }
+
         override fun onResults(results: Bundle?) {
-            if (stale()) return
+            val id = curId ?: return
             val t = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-            if (t.isNotBlank()) { heardSomething = true; emit("result", t, true) }
-            phraseDone()
-        }
-        override fun onError(error: Int) {
-            if (stale() || !active) return
-            when (error) {
-                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
-                    if (continuous) { phraseDone(); return }
-                    active = false; emit("error", "no-speech"); emit("end")
-                }
-                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> { active = false; emit("error", "not-allowed"); emit("end") }
-                SpeechRecognizer.ERROR_SERVER_DISCONNECTED, SpeechRecognizer.ERROR_CLIENT,
-                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> retryOrFail("busy", rebuild = true)
-                SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
-                SpeechRecognizer.ERROR_SERVER -> retryOrFail("network", rebuild = false, offline = true)
-                SpeechRecognizer.ERROR_AUDIO -> retryOrFail("audio-capture", rebuild = true)
-                SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> {
-                    // the offline/on-device engine lacks this language: go back online once
-                    if (onDevice || preferOffline) {
-                        preferOffline = false
-                        if (onDevice) build(false)
-                        retryOrFail("language-not-supported", rebuild = false)
-                    } else { active = false; emit("error", "language-not-supported"); emit("end") }
-                }
-                else -> retryOrFail("aborted", rebuild = true)
+            emit(id, "final", text(t))
+            if (continuous) {
+                // continuous: keep listening, no "end" (short pause so the engine is free again)
+                main.postDelayed({ if (curId == id) listen() }, 150)
+            } else {
+                curId = null
+                emit(id, "end")
             }
         }
+
+        override fun onError(error: Int) {
+            val id = curId ?: return                       // cancelled session: already ended
+            curId = null
+            val name = when (error) {
+                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "no-speech"
+                SpeechRecognizer.ERROR_AUDIO -> "audio-capture"
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "not-allowed"
+                SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
+                SpeechRecognizer.ERROR_SERVER -> "network"
+                else -> "aborted"                          // ERROR_CLIENT, ERROR_RECOGNIZER_BUSY, anything else
+            }
+            emit(id, "error", err(name))
+            emit(id, "end")
+        }
+
         override fun onBeginningOfSpeech() {}
         override fun onRmsChanged(rmsdB: Float) {}
         override fun onBufferReceived(buffer: ByteArray?) {}
@@ -207,8 +157,12 @@ class SpeechBridge(private val activity: MainActivity, private val webView: WebV
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
-    private fun emit(type: String, text: String = "", isFinal: Boolean = false) {
-        val js = "window.__lujainSR && window.__lujainSR(${JSONObject.quote(type)},${JSONObject.quote(text)},$isFinal)"
+    private fun text(t: String) = JSONObject().put("text", t).toString()
+    private fun err(name: String) = JSONObject().put("error", name).toString()
+
+    private fun emit(id: String, type: String, payload: String = "{}") {
+        val js = "window.__lujainSpeechEvent && window.__lujainSpeechEvent(" +
+            "${JSONObject.quote(id)},${JSONObject.quote(type)},${JSONObject.quote(payload)})"
         webView.post { webView.evaluateJavascript(js, null) }
     }
 }
